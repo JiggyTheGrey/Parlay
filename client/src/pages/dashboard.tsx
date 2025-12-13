@@ -30,20 +30,20 @@ export default function Dashboard() {
   });
 
   const { data: recentTransactions, isLoading: transactionsLoading } = useQuery<Transaction[]>({
-    queryKey: ["/api/transactions/recent"],
+    queryKey: ["/api/transactions"],
   });
 
   const { data: stats } = useQuery<{
-    totalWagered: string;
-    wins: number;
-    losses: number;
+    totalWins: number;
+    totalLosses: number;
+    totalEarnings: string;
     activeMatches: number;
   }>({
     queryKey: ["/api/stats/user"],
   });
 
-  const winRate = stats?.wins && stats?.losses 
-    ? ((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1)
+  const winRate = stats?.totalWins && stats?.totalLosses 
+    ? ((stats.totalWins / (stats.totalWins + stats.totalLosses)) * 100).toFixed(1)
     : "0.0";
 
   return (
@@ -101,7 +101,7 @@ export default function Dashboard() {
               {winRate}%
             </div>
             <p className="text-xs text-muted-foreground">
-              {stats?.wins || 0}W - {stats?.losses || 0}L
+              {stats?.totalWins || 0}W - {stats?.totalLosses || 0}L
             </p>
           </CardContent>
         </Card>
@@ -132,10 +132,10 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono" data-testid="text-total-wagered">
-              {parseFloat(stats?.totalWagered || "0").toFixed(4)} BTC
+              {parseFloat(stats?.totalEarnings || "0").toFixed(4)} BTC
             </div>
             <p className="text-xs text-muted-foreground">
-              All-time wager volume
+              Total earnings from wins
             </p>
           </CardContent>
         </Card>
