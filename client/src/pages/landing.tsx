@@ -1,0 +1,215 @@
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Header } from "@/components/layout/header";
+import { Swords, Users, Wallet, Shield, TrendingUp, Zap } from "lucide-react";
+import heroImage from "@assets/generated_images/bloodstrike_hero_action_scene.png";
+
+export default function Landing() {
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      
+      <section className="relative overflow-hidden">
+        <div 
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${heroImage})` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-background" />
+        
+        <div className="container relative z-10 py-24 md:py-32 lg:py-40">
+          <div className="mx-auto max-w-3xl text-center">
+            <Badge variant="secondary" className="mb-4 bg-primary/20 text-primary-foreground border-primary/30">
+              <Zap className="mr-1 h-3 w-3" />
+              Competitive Team Wagering
+            </Badge>
+            
+            <h1 className="mb-6 text-4xl font-bold tracking-tight text-white md:text-5xl lg:text-6xl">
+              Wager on Your{" "}
+              <span className="text-primary">Bloodstrike</span>{" "}
+              Skills
+            </h1>
+            
+            <p className="mb-8 text-lg text-gray-300 md:text-xl">
+              Challenge rival teams, stake crypto, and prove your dominance. 
+              The ultimate platform for competitive Bloodstrike wagering.
+            </p>
+            
+            <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+              <a href="/api/login">
+                <Button size="lg" className="gap-2 text-lg" data-testid="button-hero-login">
+                  <Swords className="h-5 w-5" />
+                  Start Competing
+                </Button>
+              </a>
+              <Button variant="outline" size="lg" className="gap-2 text-lg bg-white/10 border-white/20 text-white backdrop-blur-sm" data-testid="button-how-it-works">
+                Learn How It Works
+              </Button>
+            </div>
+
+            <div className="mt-12 flex flex-wrap items-center justify-center gap-8 text-sm text-gray-400">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <span>24 matches live</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                <span>156 teams competing</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                <span>2.4 BTC wagered today</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20">
+        <div className="container">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="mb-4 text-3xl font-bold md:text-4xl">
+              How It Works
+            </h2>
+            <p className="mb-12 text-muted-foreground">
+              Simple, secure, and fair team-vs-team wagering in just a few steps
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Users className="h-6 w-6" />
+                </div>
+                <h3 className="mb-2 font-semibold text-lg">1. Create Your Team</h3>
+                <p className="text-sm text-muted-foreground">
+                  Build your squad and invite your teammates to join
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Wallet className="h-6 w-6" />
+                </div>
+                <h3 className="mb-2 font-semibold text-lg">2. Fund Your Wallet</h3>
+                <p className="text-sm text-muted-foreground">
+                  Deposit crypto to your secure custodial wallet
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Swords className="h-6 w-6" />
+                </div>
+                <h3 className="mb-2 font-semibold text-lg">3. Challenge & Play</h3>
+                <p className="text-sm text-muted-foreground">
+                  Challenge opponents, set your wager, and battle it out
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <TrendingUp className="h-6 w-6" />
+                </div>
+                <h3 className="mb-2 font-semibold text-lg">4. Win & Withdraw</h3>
+                <p className="text-sm text-muted-foreground">
+                  Confirm results and claim your winnings instantly
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t py-20">
+        <div className="container">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="mb-4 text-3xl font-bold md:text-4xl">
+              Why Choose BloodWager?
+            </h2>
+            <p className="mb-12 text-muted-foreground">
+              Built by gamers, for gamers. Fair, fast, and secure.
+            </p>
+          </div>
+
+          <div className="grid gap-8 md:grid-cols-3">
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Shield className="h-8 w-8" />
+              </div>
+              <h3 className="mb-2 text-xl font-semibold">Secure & Custodial</h3>
+              <p className="text-muted-foreground">
+                Your funds are protected with enterprise-grade security. 
+                Full custodial control means no smart contract risks.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Users className="h-8 w-8" />
+              </div>
+              <h3 className="mb-2 text-xl font-semibold">Fair Confirmation</h3>
+              <p className="text-muted-foreground">
+                Both teams confirm match results. Disputes are resolved 
+                by our admin team for guaranteed fairness.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Zap className="h-8 w-8" />
+              </div>
+              <h3 className="mb-2 text-xl font-semibold">Instant Payouts</h3>
+              <p className="text-muted-foreground">
+                Win confirmed? Funds are instantly credited to your wallet. 
+                Withdraw anytime with low fees.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t bg-muted/30 py-16">
+        <div className="container">
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="mb-4 text-3xl font-bold md:text-4xl">
+              Ready to Dominate?
+            </h2>
+            <p className="mb-8 text-lg text-muted-foreground">
+              Join hundreds of teams already competing on BloodWager
+            </p>
+            <a href="/api/login">
+              <Button size="lg" className="gap-2 text-lg" data-testid="button-cta-login">
+                <Swords className="h-5 w-5" />
+                Create Your Team Now
+              </Button>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t py-8">
+        <div className="container">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
+                <span className="font-mono text-sm font-bold text-primary-foreground">BW</span>
+              </div>
+              <span className="font-bold">BloodWager</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              2024 BloodWager. Competitive wagering for serious gamers.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
