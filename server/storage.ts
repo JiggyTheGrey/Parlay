@@ -5,6 +5,7 @@ import {
   teamInvitations,
   matches,
   transactions,
+  creditPurchases,
   type User,
   type UpsertUser,
   type Team,
@@ -21,6 +22,8 @@ import {
   type MatchWithTeams,
   type MatchStatus,
   type InvitationStatus,
+  type CreditPurchase,
+  type InsertCreditPurchase,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
@@ -28,7 +31,7 @@ import { eq, and, or, desc, sql } from "drizzle-orm";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
-  updateUserBalance(userId: string, amount: string): Promise<User>;
+  updateUserCredits(userId: string, amount: number): Promise<User>;
   
   getTeams(): Promise<Team[]>;
   getTeam(id: string): Promise<Team | undefined>;
@@ -37,7 +40,7 @@ export interface IStorage {
   createTeam(team: InsertTeam, userId: string): Promise<Team>;
   joinTeam(teamId: string, userId: string): Promise<TeamMember>;
   isTeamMember(teamId: string, userId: string): Promise<boolean>;
-  updateTeamBalance(teamId: string, amount: string): Promise<Team>;
+  updateTeamCredits(teamId: string, amount: number): Promise<Team>;
   updateTeamStats(teamId: string, won: boolean): Promise<Team>;
   
   getMatches(status?: MatchStatus): Promise<MatchWithTeams[]>;
@@ -66,6 +69,10 @@ export interface IStorage {
   getTeamInvitationsByTeam(teamId: string): Promise<TeamInvitation[]>;
   updateInvitationStatus(id: string, status: InvitationStatus): Promise<TeamInvitation>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  
+  createCreditPurchase(purchase: InsertCreditPurchase): Promise<CreditPurchase>;
+  getCreditPurchaseBySessionId(sessionId: string): Promise<CreditPurchase | undefined>;
+  getUserCreditPurchases(userId: string): Promise<CreditPurchase[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -92,11 +99,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUserBalance(userId: string, amount: string): Promise<User> {
+  async updateUserCredits(userId: string, amount: number): Promise<User> {
     const [user] = await db
       .update(users)
       .set({
-        balance: sql`${users.balance} + ${amount}::decimal`,
+        credits: sql`${users.credits} + ${amount}`,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId))
@@ -188,11 +195,11 @@ export class DatabaseStorage implements IStorage {
     return !!member;
   }
 
-  async updateTeamBalance(teamId: string, amount: string): Promise<Team> {
+  async updateTeamCredits(teamId: string, amount: number): Promise<Team> {
     const [team] = await db
       .update(teams)
       .set({
-        balance: sql`${teams.balance} + ${amount}::decimal`,
+        credits: sql`${teams.credits} + ${amount}`,
       })
       .where(eq(teams.id, teamId))
       .returning();
@@ -517,6 +524,34 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(eq(users.email, email.toLowerCase()));
     return user;
+  }
+
+  async createCreditPurchase(purchase: InsertCreditPurchase): Promise<CreditPurchase> {
+    const [created] = await db
+      .insert(creditPurchases)
+      .values({
+        ...purchase,
+        status: "completed",
+        completedAt: new Date(),
+      })
+      .returning();
+    return created;
+  }
+
+  async getCreditPurchaseBySessionId(sessionId: string): Promise<CreditPurchase | undefined> {
+    const [purchase] = await db
+      .select()
+      .from(creditPurchases)
+      .where(eq(creditPurchases.stripeSessionId, sessionId));
+    return purchase;
+  }
+
+  async getUserCreditPurchases(userId: string): Promise<CreditPurchase[]> {
+    return db
+      .select()
+      .from(creditPurchases)
+      .where(eq(creditPurchases.userId, userId))
+      .orderBy(desc(creditPurchases.createdAt));
   }
 }
 

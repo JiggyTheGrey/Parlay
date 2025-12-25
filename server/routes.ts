@@ -2,8 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertTeamSchema, insertMatchSchema, type MatchStatus } from "@shared/schema";
+import { insertTeamSchema, insertMatchSchema, type MatchStatus, CREDIT_PACKAGES } from "@shared/schema";
 import { z } from "zod";
+import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -329,11 +330,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!challengerTeam) {
         return res.status(404).json({ message: "Challenger team not found" });
       }
-      if (parseFloat(challengerTeam.balance) < parseFloat(data.wagerAmount)) {
-        return res.status(400).json({ message: "Insufficient team balance" });
+      if (challengerTeam.credits < data.wagerCredits) {
+        return res.status(400).json({ message: "Insufficient team credits" });
       }
 
-      await storage.updateTeamBalance(data.challengerTeamId, `-${data.wagerAmount}`);
+      await storage.updateTeamCredits(data.challengerTeamId, -data.wagerCredits);
 
       const match = await storage.createMatch(data);
 
@@ -341,8 +342,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         teamId: data.challengerTeamId,
         matchId: match.id,
         type: "wager_lock",
-        amount: `-${data.wagerAmount}`,
-        description: "Wager locked for match challenge",
+        credits: -data.wagerCredits,
+        description: "Credits locked for match challenge",
       });
 
       res.status(201).json(match);
@@ -374,18 +375,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const challengedTeam = await storage.getTeam(match.challengedTeamId);
-      if (parseFloat(challengedTeam!.balance) < parseFloat(match.wagerAmount)) {
-        return res.status(400).json({ message: "Insufficient team balance" });
+      if (challengedTeam!.credits < match.wagerCredits) {
+        return res.status(400).json({ message: "Insufficient team credits" });
       }
 
-      await storage.updateTeamBalance(match.challengedTeamId, `-${match.wagerAmount}`);
+      await storage.updateTeamCredits(match.challengedTeamId, -match.wagerCredits);
 
       await storage.createTransaction({
         teamId: match.challengedTeamId,
         matchId: match.id,
         type: "wager_lock",
-        amount: `-${match.wagerAmount}`,
-        description: "Wager locked for accepting match",
+        credits: -match.wagerCredits,
+        description: "Credits locked for accepting match",
       });
 
       const updated = await storage.updateMatchStatus(matchId, "accepted");
@@ -414,14 +415,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Not a member of challenged team" });
       }
 
-      await storage.updateTeamBalance(match.challengerTeamId, match.wagerAmount);
+      await storage.updateTeamCredits(match.challengerTeamId, match.wagerCredits);
 
       await storage.createTransaction({
         teamId: match.challengerTeamId,
         matchId: match.id,
         type: "wager_refund",
-        amount: match.wagerAmount,
-        description: "Wager refunded - match declined",
+        credits: match.wagerCredits,
+        description: "Credits refunded - match declined",
       });
 
       const updated = await storage.updateMatchStatus(matchId, "cancelled");
@@ -503,8 +504,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? match.challengedTeamId
             : match.challengerTeamId;
 
-          const totalPot = (parseFloat(match.wagerAmount) * 2).toString();
-          await storage.updateTeamBalance(finalWinnerId, totalPot);
+          const totalPot = match.wagerCredits * 2;
+          await storage.updateTeamCredits(finalWinnerId, totalPot);
           await storage.updateTeamStats(finalWinnerId, true);
           await storage.updateTeamStats(loserId, false);
 
@@ -512,7 +513,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             teamId: finalWinnerId,
             matchId: match.id,
             type: "wager_win",
-            amount: totalPot,
+            credits: totalPot,
             description: "Match won - prize collected",
           });
 
@@ -530,69 +531,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/wallet/deposit", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const { amount } = req.body;
-
-      if (!amount || parseFloat(amount) <= 0) {
-        return res.status(400).json({ message: "Invalid amount" });
-      }
-
-      const user = await storage.updateUserBalance(userId, amount);
-
-      await storage.createTransaction({
-        userId,
-        type: "deposit",
-        amount,
-        balanceAfter: user.balance,
-        description: "Deposit to wallet",
-      });
-
-      res.json(user);
-    } catch (error) {
-      console.error("Error depositing:", error);
-      res.status(500).json({ message: "Failed to deposit" });
-    }
-  });
-
-  app.post("/api/wallet/withdraw", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const { amount } = req.body;
-
-      if (!amount || parseFloat(amount) <= 0) {
-        return res.status(400).json({ message: "Invalid amount" });
-      }
-
-      const currentUser = await storage.getUser(userId);
-      if (parseFloat(currentUser!.balance) < parseFloat(amount)) {
-        return res.status(400).json({ message: "Insufficient balance" });
-      }
-
-      const user = await storage.updateUserBalance(userId, `-${amount}`);
-
-      await storage.createTransaction({
-        userId,
-        type: "withdrawal",
-        amount: `-${amount}`,
-        balanceAfter: user.balance,
-        description: "Withdrawal from wallet",
-      });
-
-      res.json(user);
-    } catch (error) {
-      console.error("Error withdrawing:", error);
-      res.status(500).json({ message: "Failed to withdraw" });
-    }
-  });
-
   app.post("/api/wallet/contribute", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { teamId, amount } = req.body;
+      const { teamId, credits } = req.body;
 
-      if (!teamId || !amount || parseFloat(amount) <= 0) {
+      if (!teamId || !credits || credits <= 0) {
         return res.status(400).json({ message: "Invalid data" });
       }
 
@@ -602,19 +546,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const currentUser = await storage.getUser(userId);
-      if (parseFloat(currentUser!.balance) < parseFloat(amount)) {
-        return res.status(400).json({ message: "Insufficient balance" });
+      if (currentUser!.credits < credits) {
+        return res.status(400).json({ message: "Insufficient credits" });
       }
 
-      await storage.updateUserBalance(userId, `-${amount}`);
-      await storage.updateTeamBalance(teamId, amount);
+      await storage.updateUserCredits(userId, -credits);
+      await storage.updateTeamCredits(teamId, credits);
 
       await storage.createTransaction({
         userId,
         teamId,
         type: "team_contribution",
-        amount: `-${amount}`,
-        description: "Contributed to team balance",
+        credits: -credits,
+        creditsAfter: currentUser!.credits - credits,
+        description: "Contributed credits to team",
       });
 
       const team = await storage.getTeam(teamId);
@@ -675,8 +620,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? match.challengedTeamId
         : match.challengerTeamId;
 
-      const totalPot = (parseFloat(match.wagerAmount) * 2).toString();
-      await storage.updateTeamBalance(winnerId, totalPot);
+      const totalPot = match.wagerCredits * 2;
+      await storage.updateTeamCredits(winnerId, totalPot);
       await storage.updateTeamStats(winnerId, true);
       await storage.updateTeamStats(loserId, false);
 
@@ -684,7 +629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         teamId: winnerId,
         matchId: match.id,
         type: "wager_win",
-        amount: totalPot,
+        credits: totalPot,
         description: "Match won - dispute resolved by admin",
       });
 
@@ -693,6 +638,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error resolving dispute:", error);
       res.status(500).json({ message: "Failed to resolve dispute" });
+    }
+  });
+
+  app.get("/api/credit-packages", async (req, res) => {
+    res.json(CREDIT_PACKAGES);
+  });
+
+  app.get("/api/stripe/publishable-key", async (req, res) => {
+    try {
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishableKey });
+    } catch (error) {
+      console.error("Error getting Stripe key:", error);
+      res.status(500).json({ message: "Failed to get Stripe configuration" });
+    }
+  });
+
+  app.post("/api/credits/checkout", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { packageId } = req.body;
+
+      const creditPackage = CREDIT_PACKAGES.find(p => p.id === packageId);
+      if (!creditPackage) {
+        return res.status(400).json({ message: "Invalid package" });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+
+      const totalCredits = creditPackage.credits + (('bonus' in creditPackage) ? (creditPackage as any).bonus : 0);
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: creditPackage.name,
+              description: `${totalCredits} credits${('bonus' in creditPackage) ? ` (includes ${(creditPackage as any).bonus} bonus credits)` : ''}`,
+            },
+            unit_amount: creditPackage.priceUsd,
+          },
+          quantity: 1,
+        }],
+        mode: 'payment',
+        success_url: `${baseUrl}/wallet?success=true&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/wallet?canceled=true`,
+        metadata: {
+          userId,
+          packageId,
+          creditsToAward: totalCredits.toString(),
+        },
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ message: "Failed to create checkout session" });
+    }
+  });
+
+  app.get("/api/credits/verify/:sessionId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sessionId } = req.params;
+
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      if (session.metadata?.userId !== userId) {
+        return res.status(403).json({ message: "Session does not belong to user" });
+      }
+
+      if (session.payment_status === 'paid') {
+        const creditsToAward = parseInt(session.metadata?.creditsToAward || '0');
+        
+        const existingPurchase = await storage.getCreditPurchaseBySessionId(sessionId);
+        if (existingPurchase) {
+          return res.json({ 
+            success: true, 
+            credits: creditsToAward,
+            alreadyProcessed: true 
+          });
+        }
+
+        await storage.createCreditPurchase({
+          userId,
+          packageId: session.metadata?.packageId || '',
+          creditsAwarded: creditsToAward,
+          amountPaidCents: session.amount_total || 0,
+          stripeSessionId: sessionId,
+        });
+
+        const user = await storage.updateUserCredits(userId, creditsToAward);
+
+        await storage.createTransaction({
+          userId,
+          type: "credit_purchase",
+          credits: creditsToAward,
+          creditsAfter: user.credits,
+          description: `Purchased ${creditsToAward} credits`,
+        });
+
+        return res.json({ success: true, credits: creditsToAward, user });
+      }
+
+      res.json({ success: false, status: session.payment_status });
+    } catch (error) {
+      console.error("Error verifying purchase:", error);
+      res.status(500).json({ message: "Failed to verify purchase" });
     }
   });
 

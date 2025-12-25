@@ -113,7 +113,7 @@ export const matches = pgTable("matches", {
 // Credit packages for purchase
 export const CREDIT_PACKAGES = [
   { id: "starter", name: "Starter Pack", credits: 100, priceUsd: 499 }, // $4.99
-  { id: "popular", name: "Popular Pack", credits: 500, priceUsd: 1999, bonus: 50 }, // $19.99 + 50 bonus
+  { id: "popular", name: "Popular Pack", credits: 500, priceUsd: 1999, bonus: 50, popular: true }, // $19.99 + 50 bonus
   { id: "pro", name: "Pro Pack", credits: 1000, priceUsd: 3499, bonus: 150 }, // $34.99 + 150 bonus
   { id: "elite", name: "Elite Pack", credits: 2500, priceUsd: 7999, bonus: 500 }, // $79.99 + 500 bonus
 ] as const;
