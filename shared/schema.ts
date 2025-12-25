@@ -32,7 +32,7 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  balance: decimal("balance", { precision: 18, scale: 8 }).default("0").notNull(),
+  credits: integer("credits").default(0).notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -45,7 +45,7 @@ export const teams = pgTable("teams", {
   tag: varchar("tag", { length: 10 }).notNull(),
   avatarUrl: varchar("avatar_url"),
   ownerId: varchar("owner_id").notNull().references(() => users.id),
-  balance: decimal("balance", { precision: 18, scale: 8 }).default("0").notNull(),
+  credits: integer("credits").default(0).notNull(),
   wins: integer("wins").default(0).notNull(),
   losses: integer("losses").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -96,7 +96,7 @@ export const matches = pgTable("matches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   challengerTeamId: varchar("challenger_team_id").notNull().references(() => teams.id),
   challengedTeamId: varchar("challenged_team_id").notNull().references(() => teams.id),
-  wagerAmount: decimal("wager_amount", { precision: 18, scale: 8 }).notNull(),
+  wagerCredits: integer("wager_credits").notNull(),
   status: varchar("status", { length: 20 }).default("pending").notNull().$type<MatchStatus>(),
   game: varchar("game", { length: 50 }).default("bloodstrike").notNull(),
   gameMode: varchar("game_mode", { length: 50 }).default("standard").notNull(),
@@ -110,8 +110,35 @@ export const matches = pgTable("matches", {
   completedAt: timestamp("completed_at"),
 });
 
+// Credit packages for purchase
+export const CREDIT_PACKAGES = [
+  { id: "starter", name: "Starter Pack", credits: 100, priceUsd: 499 }, // $4.99
+  { id: "popular", name: "Popular Pack", credits: 500, priceUsd: 1999, bonus: 50 }, // $19.99 + 50 bonus
+  { id: "pro", name: "Pro Pack", credits: 1000, priceUsd: 3499, bonus: 150 }, // $34.99 + 150 bonus
+  { id: "elite", name: "Elite Pack", credits: 2500, priceUsd: 7999, bonus: 500 }, // $79.99 + 500 bonus
+] as const;
+
+export type CreditPackageId = typeof CREDIT_PACKAGES[number]["id"];
+
+// Credit purchase status
+export type CreditPurchaseStatus = "pending" | "completed" | "failed" | "refunded";
+
+// Credit purchases table (for Stripe purchases)
+export const creditPurchases = pgTable("credit_purchases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  packageId: varchar("package_id", { length: 50 }).notNull(),
+  creditsAwarded: integer("credits_awarded").notNull(),
+  amountPaidCents: integer("amount_paid_cents").notNull(),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id"),
+  stripeSessionId: varchar("stripe_session_id"),
+  status: varchar("status", { length: 20 }).default("pending").notNull().$type<CreditPurchaseStatus>(),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
 // Transaction types
-export type TransactionType = "deposit" | "withdrawal" | "wager_lock" | "wager_win" | "wager_loss" | "wager_refund" | "team_contribution" | "team_payout";
+export type TransactionType = "credit_purchase" | "wager_lock" | "wager_win" | "wager_loss" | "wager_refund" | "team_contribution" | "team_payout";
 
 // Transactions table
 export const transactions = pgTable("transactions", {
@@ -119,9 +146,10 @@ export const transactions = pgTable("transactions", {
   userId: varchar("user_id").references(() => users.id),
   teamId: varchar("team_id").references(() => teams.id),
   matchId: varchar("match_id").references(() => matches.id),
+  purchaseId: varchar("purchase_id").references(() => creditPurchases.id),
   type: varchar("type", { length: 30 }).notNull().$type<TransactionType>(),
-  amount: decimal("amount", { precision: 18, scale: 8 }).notNull(),
-  balanceAfter: decimal("balance_after", { precision: 18, scale: 8 }),
+  credits: integer("credits").notNull(),
+  creditsAfter: integer("credits_after"),
   description: text("description"),
   status: varchar("status", { length: 20 }).default("completed").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -196,6 +224,17 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
     fields: [transactions.matchId],
     references: [matches.id],
   }),
+  purchase: one(creditPurchases, {
+    fields: [transactions.purchaseId],
+    references: [creditPurchases.id],
+  }),
+}));
+
+export const creditPurchasesRelations = relations(creditPurchases, ({ one }) => ({
+  user: one(users, {
+    fields: [creditPurchases.userId],
+    references: [users.id],
+  }),
 }));
 
 // Insert schemas
@@ -210,7 +249,7 @@ export const insertTeamSchema = createInsertSchema(teams).omit({
   createdAt: true,
   wins: true,
   losses: true,
-  balance: true,
+  credits: true,
 });
 
 export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
@@ -239,6 +278,13 @@ export const insertTeamInvitationSchema = createInsertSchema(teamInvitations).om
   status: true,
 });
 
+export const insertCreditPurchaseSchema = createInsertSchema(creditPurchases).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+  status: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -263,6 +309,9 @@ export type TeamInvitationWithDetails = TeamInvitation & {
   team: Team;
   inviter: User;
 };
+
+export type CreditPurchase = typeof creditPurchases.$inferSelect;
+export type InsertCreditPurchase = z.infer<typeof insertCreditPurchaseSchema>;
 
 // Extended types with relations
 export type TeamWithMembers = Team & {
