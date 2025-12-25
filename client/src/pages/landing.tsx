@@ -75,6 +75,18 @@ export default function Landing() {
             data-testid="img-battle-banner"
           />
         </a>
+        <div className="py-6 bg-background">
+          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-8">
+            {["Blood Strike", "Call Of Duty", "Counter-Strike 2", "Valorant", "Apex Legends"].map((game) => (
+              <span 
+                key={game}
+                className="text-sm md:text-base font-semibold bg-gradient-to-r from-[#D2A56C] to-[#FEFABB] bg-clip-text text-transparent"
+              >
+                {game}
+              </span>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="py-20">
