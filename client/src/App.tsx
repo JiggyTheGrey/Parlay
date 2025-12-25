@@ -20,6 +20,7 @@ import MatchDetail from "@/pages/match-detail";
 import Wallet from "@/pages/wallet";
 import History from "@/pages/history";
 import Admin from "@/pages/admin";
+import BattleChallenge from "@/pages/battle-challenge";
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const style = {
@@ -63,6 +64,7 @@ function Router() {
     return (
       <Switch>
         <Route path="/" component={Landing} />
+        <Route path="/battle/:token" component={BattleChallenge} />
         <Route component={Landing} />
       </Switch>
     );
@@ -82,6 +84,7 @@ function Router() {
         <Route path="/wallet" component={Wallet} />
         <Route path="/history" component={History} />
         <Route path="/admin" component={Admin} />
+        <Route path="/battle/:token" component={BattleChallenge} />
         <Route component={NotFound} />
       </Switch>
     </AuthenticatedLayout>

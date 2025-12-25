@@ -20,10 +20,12 @@ import {
   XCircle,
   Loader2,
   Check,
-  X
+  X,
+  Copy,
+  Share2
 } from "lucide-react";
 import { useState } from "react";
-import type { MatchWithTeams, Team } from "@shared/schema";
+import type { MatchWithTeams, Team, Match } from "@shared/schema";
 import { SUPPORTED_GAMES } from "@shared/schema";
 
 function getGameName(gameId: string): string {
@@ -47,6 +49,8 @@ export default function MatchDetail() {
   const { toast } = useToast();
   const [selectedWinner, setSelectedWinner] = useState<string>("");
 
+  const [copied, setCopied] = useState(false);
+
   const { data: match, isLoading } = useQuery<MatchWithTeams>({
     queryKey: ["/api/matches", id],
   });
@@ -54,6 +58,19 @@ export default function MatchDetail() {
   const { data: myTeams } = useQuery<Team[]>({
     queryKey: ["/api/teams/my"],
   });
+
+  const copyShareLink = () => {
+    const matchData = match as (Match & { shareToken?: string });
+    if (matchData?.shareToken) {
+      navigator.clipboard.writeText(`${window.location.origin}/battle/${matchData.shareToken}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({
+        title: "Share link copied!",
+        description: "Send this link to the opponent captain to accept the challenge.",
+      });
+    }
+  };
 
   const acceptMatchMutation = useMutation({
     mutationFn: async () => {
@@ -159,10 +176,23 @@ export default function MatchDetail() {
             {match.challengerTeam.name} vs {match.challengedTeam.name}
           </p>
         </div>
-        <Badge variant="secondary" className={`gap-1 text-sm ${config.color}`}>
-          <StatusIcon className="h-4 w-4" />
-          {config.label}
-        </Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          {match.status === "pending" && (match as Match & { shareToken?: string }).shareToken && (
+            <Button 
+              variant="outline" 
+              className="gap-2" 
+              onClick={copyShareLink}
+              data-testid="button-copy-share-link"
+            >
+              {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+              Share Link
+            </Button>
+          )}
+          <Badge variant="secondary" className={`gap-1 text-sm ${config.color}`}>
+            <StatusIcon className="h-4 w-4" />
+            {config.label}
+          </Badge>
+        </div>
       </div>
 
       <Card>

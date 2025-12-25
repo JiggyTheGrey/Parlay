@@ -102,6 +102,7 @@ export const matches = pgTable("matches", {
   gameMode: varchar("game_mode", { length: 50 }).default("standard").notNull(),
   bestOf: integer("best_of").default(1).notNull(),
   message: text("message"),
+  shareToken: varchar("share_token", { length: 50 }).unique(),
   challengerConfirmedWinner: varchar("challenger_confirmed_winner"),
   challengedConfirmedWinner: varchar("challenged_confirmed_winner"),
   winnerId: varchar("winner_id").references(() => teams.id),

@@ -302,6 +302,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/battles/:token", async (req, res) => {
+    try {
+      const match = await storage.getMatchByShareToken(req.params.token);
+      if (!match) {
+        return res.status(404).json({ message: "Battle not found" });
+      }
+      res.json(match);
+    } catch (error) {
+      console.error("Error fetching battle:", error);
+      res.status(500).json({ message: "Failed to fetch battle" });
+    }
+  });
+
   app.post("/api/matches", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

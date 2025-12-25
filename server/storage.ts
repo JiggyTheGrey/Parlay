@@ -45,6 +45,7 @@ export interface IStorage {
   getTeamMatches(teamId: string): Promise<MatchWithTeams[]>;
   getPendingMatchesForTeam(teamId: string): Promise<MatchWithTeams[]>;
   createMatch(match: InsertMatch): Promise<Match>;
+  getMatchByShareToken(token: string): Promise<MatchWithTeams | undefined>;
   updateMatchStatus(id: string, status: MatchStatus): Promise<Match>;
   confirmMatchWinner(id: string, teamId: string, winnerId: string): Promise<Match>;
   setMatchWinner(id: string, winnerId: string): Promise<Match>;
@@ -304,8 +305,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMatch(matchData: InsertMatch): Promise<Match> {
-    const [match] = await db.insert(matches).values(matchData).returning();
+    const shareToken = `bt_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const [match] = await db.insert(matches).values({ ...matchData, shareToken }).returning();
     return match;
+  }
+
+  async getMatchByShareToken(token: string): Promise<MatchWithTeams | undefined> {
+    const [match] = await db.select().from(matches).where(eq(matches.shareToken, token));
+    if (!match) return undefined;
+
+    const challengerTeam = await this.getTeam(match.challengerTeamId);
+    const challengedTeam = await this.getTeam(match.challengedTeamId);
+
+    return {
+      ...match,
+      challengerTeam: challengerTeam!,
+      challengedTeam: challengedTeam!,
+    };
   }
 
   async updateMatchStatus(id: string, status: MatchStatus): Promise<Match> {
