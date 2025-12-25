@@ -20,7 +20,7 @@ export default function Landing() {
         
         <div className="container relative z-10 py-24 md:py-32 lg:py-40">
           <div className="mx-auto max-w-3xl text-center">
-            <Badge variant="secondary" className="mb-4 bg-primary/20 text-primary-foreground border-primary/30">
+            <Badge variant="secondary" className="mb-4 bg-white/20 text-white border-white/30">
               <Zap className="mr-1 h-3 w-3" />
               Competitive Clan Wagering
             </Badge>
@@ -32,7 +32,7 @@ export default function Landing() {
             </h1>
             
             <p className="mb-8 text-lg text-gray-300 md:text-xl">
-              Challenge rival clans, stake crypto, and prove your dominance. 
+              Challenge rival clans, stake credits, and prove your dominance. 
               The ultimate platform for competitive clan wagering.
             </p>
             
@@ -59,7 +59,7 @@ export default function Landing() {
               </div>
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
-                <span>2.4 BTC wagered today</span>
+                <span>50K+ credits wagered today</span>
               </div>
             </div>
           </div>
@@ -118,9 +118,9 @@ export default function Landing() {
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Wallet className="h-6 w-6" />
                 </div>
-                <h3 className="mb-2 font-semibold text-lg">2. Fund Your Wallet</h3>
+                <h3 className="mb-2 font-semibold text-lg">2. Buy Credits</h3>
                 <p className="text-sm text-muted-foreground">
-                  Deposit crypto to your secure custodial wallet
+                  Purchase credits to fund your team's wagers
                 </p>
               </CardContent>
             </Card>
