@@ -6,6 +6,7 @@ import {
   Wallet,
   History,
   Shield,
+  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
@@ -106,7 +107,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 space-y-3">
         <div className="rounded-md bg-muted p-3">
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4 text-muted-foreground" />
@@ -116,6 +117,12 @@ export function AppSidebar() {
             {parseFloat(user?.balance || "0").toFixed(4)} BTC
           </p>
         </div>
+        <a href="/api/logout" className="block">
+          <SidebarMenuButton className="w-full justify-start gap-2" data-testid="button-logout-sidebar">
+            <LogOut className="h-4 w-4" />
+            <span>Log Out</span>
+          </SidebarMenuButton>
+        </a>
       </SidebarFooter>
     </Sidebar>
   );

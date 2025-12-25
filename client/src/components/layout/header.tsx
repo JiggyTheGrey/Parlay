@@ -55,6 +55,13 @@ export function Header() {
 
             <ThemeToggle />
 
+            <a href="/api/logout">
+              <Button variant="outline" size="sm" className="gap-2" data-testid="button-logout-header">
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Log Out</span>
+              </Button>
+            </a>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full" data-testid="button-user-menu">
