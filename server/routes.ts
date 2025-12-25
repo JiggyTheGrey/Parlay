@@ -112,6 +112,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/teams/:id/invite", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const teamId = req.params.id;
+      const { email } = req.body;
+
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const team = await storage.getTeam(teamId);
+      if (!team) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+
+      if (team.ownerId !== userId) {
+        return res.status(403).json({ message: "Only team owner can invite members" });
+      }
+
+      const token = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const invitation = await storage.createTeamInvitation({
+        teamId,
+        email: email.toLowerCase(),
+        invitedBy: userId,
+        token,
+        expiresAt,
+      });
+
+      res.status(201).json(invitation);
+    } catch (error) {
+      console.error("Error creating invitation:", error);
+      res.status(500).json({ message: "Failed to create invitation" });
+    }
+  });
+
+  app.get("/api/teams/:id/invitations", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const teamId = req.params.id;
+
+      const team = await storage.getTeam(teamId);
+      if (!team) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+
+      if (team.ownerId !== userId) {
+        return res.status(403).json({ message: "Only team owner can view invitations" });
+      }
+
+      const invitations = await storage.getTeamInvitationsByTeam(teamId);
+      res.json(invitations);
+    } catch (error) {
+      console.error("Error fetching invitations:", error);
+      res.status(500).json({ message: "Failed to fetch invitations" });
+    }
+  });
+
+  app.get("/api/invitations/my", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user?.email) {
+        return res.json([]);
+      }
+
+      const invitations = await storage.getTeamInvitationsByEmail(user.email);
+      res.json(invitations);
+    } catch (error) {
+      console.error("Error fetching invitations:", error);
+      res.status(500).json({ message: "Failed to fetch invitations" });
+    }
+  });
+
+  app.get("/api/invitations/:token", async (req, res) => {
+    try {
+      const invitation = await storage.getTeamInvitation(req.params.token);
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found" });
+      }
+      res.json(invitation);
+    } catch (error) {
+      console.error("Error fetching invitation:", error);
+      res.status(500).json({ message: "Failed to fetch invitation" });
+    }
+  });
+
+  app.post("/api/invitations/:token/accept", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const invitation = await storage.getTeamInvitation(req.params.token);
+
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found" });
+      }
+
+      if (invitation.status !== "pending") {
+        return res.status(400).json({ message: "Invitation already used or expired" });
+      }
+
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        await storage.updateInvitationStatus(invitation.id, "expired");
+        return res.status(400).json({ message: "Invitation has expired" });
+      }
+
+      if (user?.email?.toLowerCase() !== invitation.email.toLowerCase()) {
+        return res.status(403).json({ message: "This invitation is for a different email address" });
+      }
+
+      const isMember = await storage.isTeamMember(invitation.teamId, userId);
+      if (isMember) {
+        await storage.updateInvitationStatus(invitation.id, "accepted");
+        return res.status(400).json({ message: "Already a member of this team" });
+      }
+
+      await storage.joinTeam(invitation.teamId, userId);
+      await storage.updateInvitationStatus(invitation.id, "accepted");
+
+      res.json({ success: true, teamId: invitation.teamId });
+    } catch (error) {
+      console.error("Error accepting invitation:", error);
+      res.status(500).json({ message: "Failed to accept invitation" });
+    }
+  });
+
+  app.post("/api/invitations/:token/decline", isAuthenticated, async (req: any, res) => {
+    try {
+      const invitation = await storage.getTeamInvitation(req.params.token);
+
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found" });
+      }
+
+      if (invitation.status !== "pending") {
+        return res.status(400).json({ message: "Invitation already used" });
+      }
+
+      await storage.updateInvitationStatus(invitation.id, "declined");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error declining invitation:", error);
+      res.status(500).json({ message: "Failed to decline invitation" });
+    }
+  });
+
   app.get("/api/matches", async (req, res) => {
     try {
       const status = req.query.status as MatchStatus | undefined;

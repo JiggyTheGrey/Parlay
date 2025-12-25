@@ -20,10 +20,21 @@ import {
   UserPlus,
   Copy,
   Check,
-  Loader2
+  Loader2,
+  Mail,
+  Send
 } from "lucide-react";
 import { useState } from "react";
-import type { TeamWithMembers, MatchWithTeams } from "@shared/schema";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import type { TeamWithMembers, MatchWithTeams, TeamInvitation } from "@shared/schema";
 
 export default function TeamDetail() {
   const { id } = useParams<{ id: string }>();
@@ -32,12 +43,20 @@ export default function TeamDetail() {
   const [, navigate] = useLocation();
   const [copied, setCopied] = useState(false);
 
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+
   const { data: team, isLoading } = useQuery<TeamWithMembers>({
     queryKey: ["/api/teams", id],
   });
 
   const { data: teamMatches, isLoading: matchesLoading } = useQuery<MatchWithTeams[]>({
     queryKey: ["/api/teams", id, "matches"],
+  });
+
+  const { data: teamInvitations } = useQuery<TeamInvitation[]>({
+    queryKey: ["/api/teams", id, "invitations"],
+    enabled: !!team && team.ownerId === user?.id,
   });
 
   const joinTeamMutation = useMutation({
@@ -61,6 +80,28 @@ export default function TeamDetail() {
     },
   });
 
+  const inviteMutation = useMutation({
+    mutationFn: async (email: string) => {
+      return await apiRequest("POST", `/api/teams/${id}/invite`, { email });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/teams", id, "invitations"] });
+      setInviteEmail("");
+      setInviteDialogOpen(false);
+      toast({
+        title: "Invitation sent!",
+        description: "The invitation has been sent to the email address.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to send invitation",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const copyInviteLink = () => {
     navigator.clipboard.writeText(`${window.location.origin}/teams/${id}/join`);
     setCopied(true);
@@ -69,6 +110,13 @@ export default function TeamDetail() {
       title: "Link copied!",
       description: "Share this link to invite teammates.",
     });
+  };
+
+  const handleInviteSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inviteEmail.trim()) {
+      inviteMutation.mutate(inviteEmail.trim());
+    }
   };
 
   if (isLoading) {
@@ -122,13 +170,66 @@ export default function TeamDetail() {
             Team profile and statistics
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {isMember ? (
             <>
-              <Button variant="outline" className="gap-2" onClick={copyInviteLink}>
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                Invite
-              </Button>
+              {isOwner ? (
+                <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="gap-2">
+                      <Mail className="h-4 w-4" />
+                      Invite by Email
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Invite Team Member</DialogTitle>
+                      <DialogDescription>
+                        Send an invitation to join {team?.name}. They'll receive a link to accept.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleInviteSubmit} className="space-y-4">
+                      <div className="space-y-2">
+                        <Input
+                          type="email"
+                          placeholder="teammate@example.com"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          data-testid="input-invite-email"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setInviteDialogOpen(false)}
+                          className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="submit"
+                          disabled={!inviteEmail.trim() || inviteMutation.isPending}
+                          className="flex-1 gap-2"
+                          data-testid="button-send-invite"
+                        >
+                          {inviteMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                          Send Invite
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              ) : (
+                <Button variant="outline" className="gap-2" onClick={copyInviteLink}>
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  Invite Link
+                </Button>
+              )}
               <Link href={`/matches/create?team=${id}`}>
                 <Button className="gap-2" data-testid="button-challenge">
                   <Swords className="h-4 w-4" />
@@ -258,10 +359,39 @@ export default function TeamDetail() {
             {isMember && (
               <>
                 <Separator className="my-4" />
-                <Button variant="outline" className="w-full gap-2" onClick={copyInviteLink}>
-                  <Plus className="h-4 w-4" />
-                  Invite Teammates
-                </Button>
+                {isOwner ? (
+                  <Button 
+                    variant="outline" 
+                    className="w-full gap-2" 
+                    onClick={() => setInviteDialogOpen(true)}
+                  >
+                    <Mail className="h-4 w-4" />
+                    Invite by Email
+                  </Button>
+                ) : (
+                  <Button variant="outline" className="w-full gap-2" onClick={copyInviteLink}>
+                    <Copy className="h-4 w-4" />
+                    Copy Invite Link
+                  </Button>
+                )}
+              </>
+            )}
+            
+            {isOwner && teamInvitations && teamInvitations.length > 0 && (
+              <>
+                <Separator className="my-4" />
+                <div>
+                  <h4 className="text-sm font-medium mb-2 text-muted-foreground">Pending Invitations</h4>
+                  <div className="space-y-2">
+                    {teamInvitations.filter(inv => inv.status === "pending").map((inv) => (
+                      <div key={inv.id} className="flex items-center gap-2 text-sm p-2 bg-muted/50 rounded">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span className="flex-1 truncate">{inv.email}</span>
+                        <Badge variant="secondary" className="text-xs">Pending</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </>
             )}
           </CardContent>

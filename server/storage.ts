@@ -2,6 +2,7 @@ import {
   users,
   teams,
   teamMembers,
+  teamInvitations,
   matches,
   transactions,
   type User,
@@ -9,6 +10,9 @@ import {
   type Team,
   type InsertTeam,
   type TeamMember,
+  type TeamInvitation,
+  type InsertTeamInvitation,
+  type TeamInvitationWithDetails,
   type Match,
   type InsertMatch,
   type Transaction,
@@ -16,6 +20,7 @@ import {
   type TeamWithMembers,
   type MatchWithTeams,
   type MatchStatus,
+  type InvitationStatus,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
@@ -53,6 +58,13 @@ export interface IStorage {
     totalEarnings: string;
     activeMatches: number;
   }>;
+  
+  createTeamInvitation(invitation: InsertTeamInvitation): Promise<TeamInvitation>;
+  getTeamInvitation(token: string): Promise<TeamInvitationWithDetails | undefined>;
+  getTeamInvitationsByEmail(email: string): Promise<TeamInvitationWithDetails[]>;
+  getTeamInvitationsByTeam(teamId: string): Promise<TeamInvitation[]>;
+  updateInvitationStatus(id: string, status: InvitationStatus): Promise<TeamInvitation>;
+  getUserByEmail(email: string): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -415,6 +427,80 @@ export class DatabaseStorage implements IStorage {
       totalEarnings,
       activeMatches,
     };
+  }
+
+  async createTeamInvitation(invitationData: InsertTeamInvitation): Promise<TeamInvitation> {
+    const [invitation] = await db
+      .insert(teamInvitations)
+      .values(invitationData)
+      .returning();
+    return invitation;
+  }
+
+  async getTeamInvitation(token: string): Promise<TeamInvitationWithDetails | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(teamInvitations)
+      .where(eq(teamInvitations.token, token));
+    
+    if (!invitation) return undefined;
+    
+    const team = await this.getTeam(invitation.teamId);
+    const inviter = await this.getUser(invitation.invitedBy);
+    
+    return {
+      ...invitation,
+      team: team!,
+      inviter: inviter!,
+    };
+  }
+
+  async getTeamInvitationsByEmail(email: string): Promise<TeamInvitationWithDetails[]> {
+    const invitations = await db
+      .select()
+      .from(teamInvitations)
+      .where(and(
+        eq(teamInvitations.email, email.toLowerCase()),
+        eq(teamInvitations.status, "pending")
+      ))
+      .orderBy(desc(teamInvitations.createdAt));
+    
+    return Promise.all(
+      invitations.map(async (invitation) => {
+        const team = await this.getTeam(invitation.teamId);
+        const inviter = await this.getUser(invitation.invitedBy);
+        return {
+          ...invitation,
+          team: team!,
+          inviter: inviter!,
+        };
+      })
+    );
+  }
+
+  async getTeamInvitationsByTeam(teamId: string): Promise<TeamInvitation[]> {
+    return db
+      .select()
+      .from(teamInvitations)
+      .where(eq(teamInvitations.teamId, teamId))
+      .orderBy(desc(teamInvitations.createdAt));
+  }
+
+  async updateInvitationStatus(id: string, status: InvitationStatus): Promise<TeamInvitation> {
+    const [invitation] = await db
+      .update(teamInvitations)
+      .set({ status })
+      .where(eq(teamInvitations.id, id))
+      .returning();
+    return invitation;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email.toLowerCase()));
+    return user;
   }
 }
 

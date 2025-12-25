@@ -60,6 +60,20 @@ export const teamMembers = pgTable("team_members", {
   joinedAt: timestamp("joined_at").defaultNow(),
 });
 
+// Team invitations for email invites
+export type InvitationStatus = "pending" | "accepted" | "declined" | "expired";
+
+export const teamInvitations = pgTable("team_invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  teamId: varchar("team_id").notNull().references(() => teams.id),
+  email: varchar("email").notNull(),
+  invitedBy: varchar("invited_by").notNull().references(() => users.id),
+  status: varchar("status", { length: 20 }).default("pending").notNull().$type<InvitationStatus>(),
+  token: varchar("token").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
 // Match status enum values
 export type MatchStatus = "pending" | "accepted" | "active" | "confirming" | "disputed" | "completed" | "cancelled";
 
@@ -140,6 +154,17 @@ export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
   }),
 }));
 
+export const teamInvitationsRelations = relations(teamInvitations, ({ one }) => ({
+  team: one(teams, {
+    fields: [teamInvitations.teamId],
+    references: [teams.id],
+  }),
+  inviter: one(users, {
+    fields: [teamInvitations.invitedBy],
+    references: [users.id],
+  }),
+}));
+
 export const matchesRelations = relations(matches, ({ one }) => ({
   challengerTeam: one(teams, {
     fields: [matches.challengerTeamId],
@@ -207,6 +232,12 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
   createdAt: true,
 });
 
+export const insertTeamInvitationSchema = createInsertSchema(teamInvitations).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -223,6 +254,14 @@ export type InsertMatch = z.infer<typeof insertMatchSchema>;
 
 export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
+
+export type TeamInvitation = typeof teamInvitations.$inferSelect;
+export type InsertTeamInvitation = z.infer<typeof insertTeamInvitationSchema>;
+
+export type TeamInvitationWithDetails = TeamInvitation & {
+  team: Team;
+  inviter: User;
+};
 
 // Extended types with relations
 export type TeamWithMembers = Team & {
