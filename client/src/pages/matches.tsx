@@ -16,6 +16,12 @@ import {
   Trophy
 } from "lucide-react";
 import type { MatchWithTeams } from "@shared/schema";
+import { SUPPORTED_GAMES } from "@shared/schema";
+
+function getGameName(gameId: string): string {
+  const game = SUPPORTED_GAMES.find(g => g.id === gameId);
+  return game?.name || gameId;
+}
 
 const statusConfig = {
   pending: { icon: Clock, color: "text-yellow-500", bg: "bg-yellow-500/10", label: "Pending" },
@@ -57,7 +63,7 @@ export default function Matches() {
                 {config.label}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {match.gameMode} - BO{match.bestOf}
+                {getGameName((match as any).game || "bloodstrike")} - BO{match.bestOf}
               </span>
             </div>
 

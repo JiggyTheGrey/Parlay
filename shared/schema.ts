@@ -63,6 +63,20 @@ export const teamMembers = pgTable("team_members", {
 // Match status enum values
 export type MatchStatus = "pending" | "accepted" | "active" | "confirming" | "disputed" | "completed" | "cancelled";
 
+// Supported games
+export const SUPPORTED_GAMES = [
+  { id: "bloodstrike", name: "Bloodstrike" },
+  { id: "cod_warzone", name: "Call of Duty: Warzone" },
+  { id: "cod_mw3", name: "Call of Duty: MW3" },
+  { id: "apex", name: "Apex Legends" },
+  { id: "fortnite", name: "Fortnite" },
+  { id: "valorant", name: "Valorant" },
+  { id: "csgo", name: "CS2" },
+  { id: "other", name: "Other" },
+] as const;
+
+export type GameId = typeof SUPPORTED_GAMES[number]["id"];
+
 // Matches table
 export const matches = pgTable("matches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -70,6 +84,7 @@ export const matches = pgTable("matches", {
   challengedTeamId: varchar("challenged_team_id").notNull().references(() => teams.id),
   wagerAmount: decimal("wager_amount", { precision: 18, scale: 8 }).notNull(),
   status: varchar("status", { length: 20 }).default("pending").notNull().$type<MatchStatus>(),
+  game: varchar("game", { length: 50 }).default("bloodstrike").notNull(),
   gameMode: varchar("game_mode", { length: 50 }).default("standard").notNull(),
   bestOf: integer("best_of").default(1).notNull(),
   message: text("message"),

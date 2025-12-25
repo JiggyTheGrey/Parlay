@@ -24,6 +24,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { MatchWithTeams, Team } from "@shared/schema";
+import { SUPPORTED_GAMES } from "@shared/schema";
+
+function getGameName(gameId: string): string {
+  const game = SUPPORTED_GAMES.find(g => g.id === gameId);
+  return game?.name || gameId;
+}
 
 const statusConfig = {
   pending: { icon: Clock, color: "text-yellow-500", bg: "bg-yellow-500/10", label: "Pending Acceptance" },
@@ -198,7 +204,8 @@ export default function MatchDetail() {
                 </p>
                 <p className="text-sm text-muted-foreground">Total Pot: {(parseFloat(match.wagerAmount) * 2).toFixed(4)} BTC</p>
               </div>
-              <div className="flex gap-2 text-sm text-muted-foreground">
+              <div className="flex flex-wrap gap-2 text-sm text-muted-foreground justify-center">
+                <Badge variant="secondary">{getGameName((match as any).game || "bloodstrike")}</Badge>
                 <Badge variant="secondary">{match.gameMode}</Badge>
                 <Badge variant="secondary">BO{match.bestOf}</Badge>
               </div>

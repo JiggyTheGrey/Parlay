@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Swords, ArrowLeft, Loader2, Wallet, AlertCircle } from "lucide-react";
 import type { Team } from "@shared/schema";
+import { SUPPORTED_GAMES } from "@shared/schema";
 
 const createMatchSchema = z.object({
   challengerTeamId: z.string().min(1, "Select your team"),
@@ -36,6 +37,7 @@ const createMatchSchema = z.object({
     .min(1, "Enter wager amount")
     .refine(val => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Must be a positive number")
     .refine(val => parseFloat(val) >= 0.0001, "Minimum wager is 0.0001 BTC"),
+  game: z.string().min(1, "Select a game"),
   gameMode: z.string().default("standard"),
   bestOf: z.string().default("1"),
   message: z.string().optional(),
@@ -64,6 +66,7 @@ export default function MatchCreate() {
       challengerTeamId: preselectedTeam || "",
       challengedTeamId: "",
       wagerAmount: "",
+      game: "bloodstrike",
       gameMode: "standard",
       bestOf: "1",
       message: "",
@@ -231,6 +234,31 @@ export default function MatchCreate() {
                             No teams available
                           </SelectItem>
                         )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="game"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Game</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-game">
+                          <SelectValue placeholder="Select game" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {SUPPORTED_GAMES.map((game) => (
+                          <SelectItem key={game.id} value={game.id}>
+                            {game.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
