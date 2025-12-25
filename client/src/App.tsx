@@ -90,7 +90,7 @@ function Router() {
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="bloodwager-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="parlay-it-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />

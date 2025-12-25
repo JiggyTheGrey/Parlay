@@ -26,9 +26,9 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
-            <span className="font-mono text-lg font-bold text-primary-foreground">BW</span>
+            <span className="font-mono text-lg font-bold text-primary-foreground">PI</span>
           </div>
-          <span className="hidden font-bold text-xl sm:inline-block">BloodWager</span>
+          <span className="hidden font-bold text-xl sm:inline-block">Parlay-it</span>
         </Link>
 
         {isAuthenticated ? (

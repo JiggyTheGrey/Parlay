@@ -1,8 +1,8 @@
-# BloodWager - Crypto Team Wagering Platform
+# Parlay-it - Crypto Clan Wagering Platform
 
 ## Overview
 
-BloodWager is a centralized web application for team-vs-team crypto wagering focused on the game Bloodstrike. This is a custodial platform (similar to Stake.com) where teams can create accounts, challenge each other with crypto wagers, play matches off-platform, and manually confirm winners for fund distribution. The platform does NOT use smart contracts - all balances are controlled by the backend.
+Parlay-it is a centralized web application for clan-vs-clan crypto wagering across multiple games (Bloodstrike, Call of Duty, etc.). This is a custodial platform (similar to Stake.com) where clans can create accounts, challenge each other with crypto wagers, play matches off-platform, and manually confirm winners for fund distribution. The platform does NOT use smart contracts - all balances are controlled by the backend.
 
 **Core Features:**
 - Team creation and management with captain roles

@@ -21,18 +21,18 @@ export default function Landing() {
           <div className="mx-auto max-w-3xl text-center">
             <Badge variant="secondary" className="mb-4 bg-primary/20 text-primary-foreground border-primary/30">
               <Zap className="mr-1 h-3 w-3" />
-              Competitive Team Wagering
+              Competitive Clan Wagering
             </Badge>
             
             <h1 className="mb-6 text-4xl font-bold tracking-tight text-white md:text-5xl lg:text-6xl">
               Wager on Your{" "}
-              <span className="text-primary">Bloodstrike</span>{" "}
+              <span className="text-primary">Gaming</span>{" "}
               Skills
             </h1>
             
             <p className="mb-8 text-lg text-gray-300 md:text-xl">
-              Challenge rival teams, stake crypto, and prove your dominance. 
-              The ultimate platform for competitive Bloodstrike wagering.
+              Challenge rival clans, stake crypto, and prove your dominance. 
+              The ultimate platform for competitive clan wagering.
             </p>
             
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
@@ -72,7 +72,7 @@ export default function Landing() {
               How It Works
             </h2>
             <p className="mb-12 text-muted-foreground">
-              Simple, secure, and fair team-vs-team wagering in just a few steps
+              Simple, secure, and fair clan-vs-clan wagering in just a few steps
             </p>
           </div>
 
@@ -82,7 +82,7 @@ export default function Landing() {
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Users className="h-6 w-6" />
                 </div>
-                <h3 className="mb-2 font-semibold text-lg">1. Create Your Team</h3>
+                <h3 className="mb-2 font-semibold text-lg">1. Create Your Clan</h3>
                 <p className="text-sm text-muted-foreground">
                   Build your squad and invite your teammates to join
                 </p>
@@ -132,7 +132,7 @@ export default function Landing() {
         <div className="container">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="mb-4 text-3xl font-bold md:text-4xl">
-              Why Choose BloodWager?
+              Why Choose Parlay-it?
             </h2>
             <p className="mb-12 text-muted-foreground">
               Built by gamers, for gamers. Fair, fast, and secure.
@@ -183,12 +183,12 @@ export default function Landing() {
               Ready to Dominate?
             </h2>
             <p className="mb-8 text-lg text-muted-foreground">
-              Join hundreds of teams already competing on BloodWager
+              Join hundreds of clans already competing on Parlay-it
             </p>
             <a href="/api/login">
               <Button size="lg" className="gap-2 text-lg" data-testid="button-cta-login">
                 <Swords className="h-5 w-5" />
-                Create Your Team Now
+                Create Your Clan Now
               </Button>
             </a>
           </div>
@@ -200,12 +200,12 @@ export default function Landing() {
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-                <span className="font-mono text-sm font-bold text-primary-foreground">BW</span>
+                <span className="font-mono text-sm font-bold text-primary-foreground">PI</span>
               </div>
-              <span className="font-bold">BloodWager</span>
+              <span className="font-bold">Parlay-it</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              2024 BloodWager. Competitive wagering for serious gamers.
+              2024 Parlay-it. Competitive wagering for serious gamers.
             </p>
           </div>
         </div>

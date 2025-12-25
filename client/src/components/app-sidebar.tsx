@@ -58,9 +58,9 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/dashboard" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-            <span className="font-mono text-sm font-bold text-primary-foreground">BW</span>
+            <span className="font-mono text-sm font-bold text-primary-foreground">PI</span>
           </div>
-          <span className="font-bold text-lg">BloodWager</span>
+          <span className="font-bold text-lg">Parlay-it</span>
         </Link>
       </SidebarHeader>
       <SidebarContent>

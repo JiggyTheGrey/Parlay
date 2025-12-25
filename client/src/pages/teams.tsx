@@ -179,7 +179,7 @@ export default function Teams() {
                   description={
                     searchQuery 
                       ? `No teams match "${searchQuery}". Try a different search term.`
-                      : "Be the first to create a team on BloodWager!"
+                      : "Be the first to create a clan on Parlay-it!"
                   }
                   action={
                     !searchQuery && (
