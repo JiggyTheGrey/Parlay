@@ -6,7 +6,10 @@ Parlay-it is a centralized web application for clan-vs-clan crypto wagering acro
 
 **Core Features:**
 - Team creation and management with captain roles
+- Email invitation system for team members (captains can invite by email)
 - Match challenges with crypto wagers between teams
+- Multi-game support (Bloodstrike, Call of Duty, Apex, Valorant, CS2, Fortnite, and more)
+- Shareable battle links for opponent captains to accept challenges
 - Manual winner confirmation with dispute resolution
 - Custodial wallet system for deposits/withdrawals
 - Admin panel for dispute resolution
@@ -40,7 +43,10 @@ The frontend follows a standard SPA pattern with:
 Key API routes include:
 - `/api/auth/*` - Authentication endpoints
 - `/api/teams/*` - Team CRUD and membership
+- `/api/teams/:id/invite` - Email invitation for team members
+- `/api/invitations/*` - Accept/decline team invitations
 - `/api/matches/*` - Match creation, acceptance, and confirmation
+- `/api/battles/:token` - Public battle link access
 - `/api/wallet/*` - Deposit/withdrawal operations
 - `/api/admin/*` - Admin dispute resolution
 
@@ -53,7 +59,8 @@ Core entities:
 - `users` - User accounts with balance and admin flag
 - `teams` - Teams with owner, balance, and win/loss stats
 - `teamMembers` - Many-to-many user-team relationships
-- `matches` - Wager matches with status workflow (pending → accepted → active → confirming → completed/disputed)
+- `teamInvitations` - Email-based team invitation system with tokens and expiration
+- `matches` - Wager matches with status workflow, game selection, and shareToken for public links
 - `transactions` - Wallet transaction history
 - `sessions` - Authentication session storage
 
