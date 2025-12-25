@@ -26,7 +26,7 @@ export default function Landing() {
             
             <h1 className="mb-6 text-4xl font-bold tracking-tight text-white md:text-5xl lg:text-6xl">
               Wager on Your{" "}
-              <span className="text-primary">Gaming</span>{" "}
+              <span className="text-primary-gradient">Gaming</span>{" "}
               Skills
             </h1>
             

@@ -25,10 +25,10 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-gradient">
             <span className="font-mono text-lg font-bold text-primary-foreground">PI</span>
           </div>
-          <span className="hidden font-bold text-xl sm:inline-block">Parlay-it</span>
+          <span className="hidden font-bold text-xl sm:inline-block text-primary-gradient">Parlay-it</span>
         </Link>
 
         {isAuthenticated ? (

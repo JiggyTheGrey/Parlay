@@ -57,10 +57,10 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-gradient">
             <span className="font-mono text-sm font-bold text-primary-foreground">PI</span>
           </div>
-          <span className="font-bold text-lg">Parlay-it</span>
+          <span className="font-bold text-lg text-primary-gradient">Parlay-it</span>
         </Link>
       </SidebarHeader>
       <SidebarContent>
