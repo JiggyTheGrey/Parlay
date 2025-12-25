@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Swords, Users, Wallet, Shield, TrendingUp, Zap } from "lucide-react";
 import heroImage from "@assets/generated_images/bloodstrike_hero_action_scene.png";
+import battleBanner from "@assets/banner_parlay_1766688349033.png";
 
 export default function Landing() {
   return (
@@ -63,6 +64,17 @@ export default function Landing() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="relative overflow-hidden">
+        <a href="/api/login" className="block">
+          <img 
+            src={battleBanner} 
+            alt="Clan vs Clan Battle" 
+            className="w-full h-auto object-cover"
+            data-testid="img-battle-banner"
+          />
+        </a>
       </section>
 
       <section className="py-20">
