@@ -111,10 +111,10 @@ export function AppSidebar() {
         <div className="rounded-md bg-muted p-3">
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Balance</span>
+            <span className="text-xs text-muted-foreground">Credits</span>
           </div>
           <p className="mt-1 font-mono text-lg font-semibold">
-            {parseFloat(user?.balance || "0").toFixed(4)} BTC
+            {(user?.credits || 0).toLocaleString()}
           </p>
         </div>
         <a href="/api/logout" className="block">

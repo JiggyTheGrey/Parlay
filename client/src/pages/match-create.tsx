@@ -33,10 +33,10 @@ import { SUPPORTED_GAMES } from "@shared/schema";
 const createMatchSchema = z.object({
   challengerTeamId: z.string().min(1, "Select your team"),
   challengedTeamId: z.string().min(1, "Select opponent team"),
-  wagerAmount: z.string()
+  wagerCredits: z.string()
     .min(1, "Enter wager amount")
-    .refine(val => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Must be a positive number")
-    .refine(val => parseFloat(val) >= 0.0001, "Minimum wager is 0.0001 BTC"),
+    .refine(val => !isNaN(parseInt(val)) && parseInt(val) > 0, "Must be a positive number")
+    .refine(val => parseInt(val) >= 10, "Minimum wager is 10 credits"),
   game: z.string().min(1, "Select a game"),
   gameMode: z.string().default("standard"),
   bestOf: z.string().default("1"),
@@ -65,7 +65,7 @@ export default function MatchCreate() {
     defaultValues: {
       challengerTeamId: preselectedTeam || "",
       challengedTeamId: "",
-      wagerAmount: "",
+      wagerCredits: "",
       game: "bloodstrike",
       gameMode: "standard",
       bestOf: "1",
@@ -75,14 +75,14 @@ export default function MatchCreate() {
 
   const selectedChallengerTeam = myTeams?.find(t => t.id === form.watch("challengerTeamId"));
   const opponentTeams = allTeams?.filter(t => t.id !== form.watch("challengerTeamId"));
-  const wagerAmount = parseFloat(form.watch("wagerAmount") || "0");
-  const hasInsufficientBalance = selectedChallengerTeam && wagerAmount > parseFloat(selectedChallengerTeam.balance);
+  const wagerCredits = parseInt(form.watch("wagerCredits") || "0");
+  const hasInsufficientBalance = selectedChallengerTeam && wagerCredits > (selectedChallengerTeam.credits || 0);
 
   const createMatchMutation = useMutation({
     mutationFn: async (data: CreateMatchForm) => {
       return await apiRequest("POST", "/api/matches", {
         ...data,
-        wagerAmount: data.wagerAmount,
+        wagerCredits: parseInt(data.wagerCredits),
         bestOf: parseInt(data.bestOf),
       });
     },
@@ -195,7 +195,7 @@ export default function MatchCreate() {
                               <span>{team.name}</span>
                               <span className="text-muted-foreground">[{team.tag}]</span>
                               <span className="font-mono text-xs">
-                                {parseFloat(team.balance).toFixed(4)} BTC
+                                {(team.credits || 0).toLocaleString()} credits
                               </span>
                             </div>
                           </SelectItem>
@@ -268,18 +268,18 @@ export default function MatchCreate() {
 
               <FormField
                 control={form.control}
-                name="wagerAmount"
+                name="wagerCredits"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Wager Amount (BTC)</FormLabel>
+                    <FormLabel>Wager Amount (Credits)</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Wallet className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input 
                           type="number"
-                          step="0.0001"
-                          min="0.0001"
-                          placeholder="0.0000" 
+                          step="1"
+                          min="10"
+                          placeholder="100" 
                           className="pl-10 font-mono"
                           {...field}
                           data-testid="input-wager-amount"
@@ -288,16 +288,16 @@ export default function MatchCreate() {
                     </FormControl>
                     {selectedChallengerTeam && (
                       <FormDescription className="flex items-center gap-2">
-                        Team balance: 
+                        Team credits: 
                         <span className="font-mono">
-                          {parseFloat(selectedChallengerTeam.balance).toFixed(4)} BTC
+                          {(selectedChallengerTeam.credits || 0).toLocaleString()}
                         </span>
                       </FormDescription>
                     )}
                     {hasInsufficientBalance && (
                       <div className="flex items-center gap-2 text-destructive text-sm">
                         <AlertCircle className="h-4 w-4" />
-                        Insufficient team balance
+                        Insufficient team credits
                       </div>
                     )}
                     <FormMessage />

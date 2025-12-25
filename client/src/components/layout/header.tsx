@@ -44,7 +44,7 @@ export function Header() {
               <Button variant="outline" size="sm" className="gap-2" data-testid="button-wallet">
                 <Wallet className="h-4 w-4" />
                 <span className="font-mono">
-                  {parseFloat(user?.balance || "0").toFixed(4)} BTC
+                  {(user?.credits || 0).toLocaleString()} credits
                 </span>
               </Button>
             </Link>

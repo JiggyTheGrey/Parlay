@@ -56,7 +56,7 @@ export default function Teams() {
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <span className="font-mono text-sm font-medium text-primary">
-                  {parseFloat(team.balance).toFixed(4)} BTC
+                  {(team.credits || 0).toLocaleString()} credits
                 </span>
                 <Button size="sm" variant="outline" className="gap-1" data-testid={`button-challenge-${team.id}`}>
                   <Swords className="h-4 w-4" />

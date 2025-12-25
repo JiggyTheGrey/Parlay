@@ -112,10 +112,10 @@ export default function History() {
                             : "text-muted-foreground"
                         }`}>
                           {match.status === "completed" && (isWinner ? "+" : "-")}
-                          {parseFloat(match.wagerAmount).toFixed(4)} BTC
+                          {(match.wagerCredits || 0).toLocaleString()} credits
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Total pot: {(parseFloat(match.wagerAmount) * 2).toFixed(4)} BTC
+                          Total pot: {((match.wagerCredits || 0) * 2).toLocaleString()} credits
                         </p>
                       </div>
                     </div>

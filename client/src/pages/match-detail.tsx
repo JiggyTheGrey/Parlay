@@ -230,9 +230,9 @@ export default function MatchDetail() {
               </div>
               <div className="text-center">
                 <p className="font-mono text-2xl font-bold text-primary">
-                  {parseFloat(match.wagerAmount).toFixed(4)} BTC
+                  {(match.wagerCredits || 0).toLocaleString()} credits
                 </p>
-                <p className="text-sm text-muted-foreground">Total Pot: {(parseFloat(match.wagerAmount) * 2).toFixed(4)} BTC</p>
+                <p className="text-sm text-muted-foreground">Total Pot: {((match.wagerCredits || 0) * 2).toLocaleString()} credits</p>
               </div>
               <div className="flex flex-wrap gap-2 text-sm text-muted-foreground justify-center">
                 <Badge variant="secondary">{getGameName((match as any).game || "bloodstrike")}</Badge>
@@ -417,7 +417,7 @@ export default function MatchDetail() {
                 <Trophy className="mx-auto mb-2 h-8 w-8 text-green-500" />
                 <p className="font-medium text-green-500">Match Complete!</p>
                 <p className="text-sm text-muted-foreground">
-                  Winner: {match.winner?.name} | Payout: {(parseFloat(match.wagerAmount) * 2).toFixed(4)} BTC
+                  Winner: {match.winner?.name} | Payout: {((match.wagerCredits || 0) * 2).toLocaleString()} credits
                 </p>
               </div>
             )}

@@ -178,7 +178,7 @@ export default function BattleChallenge() {
           <div className="mt-6 p-4 rounded-md bg-primary/5 border border-primary/20 text-center">
             <p className="text-sm text-muted-foreground mb-1">Wager Amount</p>
             <p className="text-3xl font-bold font-mono text-primary">
-              {parseFloat(match.wagerAmount).toFixed(4)} BTC
+              {(match.wagerCredits || 0).toLocaleString()} credits
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Winner takes all

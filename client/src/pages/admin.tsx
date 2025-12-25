@@ -178,7 +178,7 @@ export default function Admin() {
                             {match.challengerTeam.name} vs {match.challengedTeam.name}
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            Wager: {parseFloat(match.wagerAmount).toFixed(4)} BTC
+                            Wager: {(match.wagerCredits || 0).toLocaleString()} credits
                           </p>
                         </div>
                         <Badge variant="destructive">Disputed</Badge>
@@ -285,7 +285,7 @@ export default function Admin() {
                       <div className="flex items-center gap-2">
                         {u.isAdmin && <Badge>Admin</Badge>}
                         <span className="font-mono text-sm">
-                          {parseFloat(u.balance).toFixed(4)} BTC
+                          {(u.credits || 0).toLocaleString()} credits
                         </span>
                       </div>
                     </div>
@@ -327,7 +327,7 @@ export default function Admin() {
                           {team.wins}W - {team.losses}L
                         </span>
                         <span className="font-mono text-sm">
-                          {parseFloat(team.balance).toFixed(4)} BTC
+                          {(team.credits || 0).toLocaleString()} credits
                         </span>
                       </div>
                     </div>

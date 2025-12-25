@@ -75,16 +75,16 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Balance
+              Credits
             </CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono" data-testid="text-balance">
-              {parseFloat(user?.balance || "0").toFixed(4)} BTC
+              {(user?.credits || 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Custodial wallet balance
+              Available for wagering
             </p>
           </CardContent>
         </Card>
@@ -132,10 +132,10 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono" data-testid="text-total-wagered">
-              {parseFloat(stats?.totalEarnings || "0").toFixed(4)} BTC
+              {parseInt(stats?.totalEarnings || "0").toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Total earnings from wins
+              Total credits won
             </p>
           </CardContent>
         </Card>
@@ -177,7 +177,7 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <p className="font-mono text-sm font-medium">
-                          {parseFloat(team.balance).toFixed(4)} BTC
+                          {(team.credits || 0).toLocaleString()} credits
                         </p>
                       </div>
                     </div>
@@ -250,7 +250,7 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <p className="font-mono text-sm font-medium text-primary">
-                          {parseFloat(match.wagerAmount).toFixed(4)} BTC
+                          {(match.wagerCredits || 0).toLocaleString()} credits
                         </p>
                       </div>
                     </div>
@@ -305,11 +305,11 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center gap-3">
                     <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                      tx.type.includes("win") || tx.type === "deposit" 
+                      tx.type.includes("win") || tx.type === "credit_purchase" 
                         ? "bg-green-500/10 text-green-500" 
                         : "bg-red-500/10 text-red-500"
                     }`}>
-                      {tx.type.includes("win") || tx.type === "deposit" ? (
+                      {tx.type.includes("win") || tx.type === "credit_purchase" ? (
                         <TrendingUp className="h-4 w-4" />
                       ) : (
                         <TrendingUp className="h-4 w-4 rotate-180" />
@@ -326,12 +326,12 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right">
                     <p className={`font-mono text-sm font-medium ${
-                      tx.type.includes("win") || tx.type === "deposit"
+                      tx.type.includes("win") || tx.type === "credit_purchase"
                         ? "text-green-500"
                         : "text-red-500"
                     }`}>
-                      {tx.type.includes("win") || tx.type === "deposit" ? "+" : "-"}
-                      {parseFloat(tx.amount).toFixed(4)} BTC
+                      {tx.type.includes("win") || tx.type === "credit_purchase" ? "+" : "-"}
+                      {(tx.credits || 0).toLocaleString()} credits
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(tx.createdAt!).toLocaleDateString()}

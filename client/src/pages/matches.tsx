@@ -81,7 +81,7 @@ export default function Matches() {
                   VS
                 </div>
                 <p className="mt-2 font-mono text-lg font-bold text-primary">
-                  {parseFloat(match.wagerAmount).toFixed(4)} BTC
+                  {(match.wagerCredits || 0).toLocaleString()} credits
                 </p>
               </div>
 

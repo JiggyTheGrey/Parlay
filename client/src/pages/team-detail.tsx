@@ -259,13 +259,13 @@ export default function TeamDetail() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Team Balance
+              Team Credits
             </CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {parseFloat(team.balance).toFixed(4)} BTC
+              {(team.credits || 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -448,7 +448,7 @@ export default function TeamDetail() {
                         </div>
                         <div className="text-right">
                           <p className="font-mono text-sm font-medium">
-                            {parseFloat(match.wagerAmount).toFixed(4)} BTC
+                            {(match.wagerCredits || 0).toLocaleString()} credits
                           </p>
                         </div>
                       </div>
