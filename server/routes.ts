@@ -5,6 +5,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertTeamSchema, insertMatchSchema, insertCampaignSchema, type MatchStatus, type CampaignStatus, CREDIT_PACKAGES } from "@shared/schema";
 import { z } from "zod";
 import { getPaystackPublicKey, initializePaystackTransaction, verifyPaystackTransaction } from "./paystackClient";
+import { convertUsdToNgnKobo } from "./exchangeRate";
 
 const MAX_TEAM_MEMBERS = 5;
 
@@ -760,10 +761,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate unique reference
       const reference = `parlay_${userId}_${packageId}_${Date.now()}`;
 
-      // Convert USD cents to NGN kobo (approximate rate, or use fixed kobo amount)
-      // For now, we'll pass the amount in kobo - Paystack expects kobo for NGN
-      // You may need to adjust pricing for your local currency
-      const amountKobo = creditPackage.priceUsd * 10; // Simple conversion - adjust as needed
+      // Convert USD cents to NGN kobo using real-time exchange rate
+      const amountKobo = await convertUsdToNgnKobo(creditPackage.priceUsd);
 
       const paystackResponse = await initializePaystackTransaction(
         user.email,
