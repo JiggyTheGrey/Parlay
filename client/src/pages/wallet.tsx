@@ -46,8 +46,7 @@ export default function WalletPage() {
 
   const purchaseMutation = useMutation({
     mutationFn: async (packageId: string) => {
-      const res = await apiRequest("POST", "/api/credits/checkout", { packageId });
-      return res.json();
+      return await apiRequest("POST", "/api/credits/checkout", { packageId });
     },
     onSuccess: (data) => {
       if (data.url) {
