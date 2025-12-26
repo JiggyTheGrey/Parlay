@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { 
   Select, 
   SelectContent, 
@@ -11,6 +14,15 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -22,10 +34,15 @@ import {
   Users,
   Trophy,
   Loader2,
-  ArrowLeft
+  ArrowLeft,
+  Megaphone,
+  Plus,
+  Calendar,
+  Coins
 } from "lucide-react";
 import { useState } from "react";
-import type { MatchWithTeams, Team, User } from "@shared/schema";
+import { format } from "date-fns";
+import type { MatchWithTeams, Team, User, Campaign } from "@shared/schema";
 
 export default function Admin() {
   const { user } = useAuth();
@@ -44,8 +61,21 @@ export default function Admin() {
     queryKey: ["/api/admin/teams"],
   });
 
+  const { data: allCampaigns, isLoading: campaignsLoading } = useQuery<Campaign[]>({
+    queryKey: ["/api/campaigns"],
+  });
+
   const [resolvingMatch, setResolvingMatch] = useState<string | null>(null);
   const [selectedWinner, setSelectedWinner] = useState<string>("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [campaignForm, setCampaignForm] = useState({
+    name: "",
+    description: "",
+    prizePoolCredits: 10000,
+    rewardPerWin: 100,
+    startDate: format(new Date(), "yyyy-MM-dd"),
+    endDate: format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
+  });
 
   const resolveDisputeMutation = useMutation({
     mutationFn: async ({ matchId, winnerId }: { matchId: string; winnerId: string }) => {
@@ -57,6 +87,41 @@ export default function Admin() {
       toast({ title: "Dispute resolved", description: "The match has been settled." });
       setResolvingMatch(null);
       setSelectedWinner("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const createCampaignMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/admin/campaigns", campaignForm);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+      toast({ title: "Campaign created", description: "The campaign is now active." });
+      setCreateDialogOpen(false);
+      setCampaignForm({
+        name: "",
+        description: "",
+        prizePoolCredits: 10000,
+        rewardPerWin: 100,
+        startDate: format(new Date(), "yyyy-MM-dd"),
+        endDate: format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const endCampaignMutation = useMutation({
+    mutationFn: async (campaignId: string) => {
+      return await apiRequest("POST", `/api/admin/campaigns/${campaignId}/end`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+      toast({ title: "Campaign ended", description: "The campaign has been completed." });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -92,7 +157,7 @@ export default function Admin() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -137,6 +202,21 @@ export default function Admin() {
             <p className="text-xs text-muted-foreground">Active teams</p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Active Campaigns
+            </CardTitle>
+            <Megaphone className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {allCampaigns?.filter(c => c.status === "active").length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Running competitions</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs defaultValue="disputes" className="space-y-6">
@@ -144,6 +224,10 @@ export default function Admin() {
           <TabsTrigger value="disputes" data-testid="tab-disputes">
             <AlertCircle className="mr-2 h-4 w-4" />
             Disputes
+          </TabsTrigger>
+          <TabsTrigger value="campaigns" data-testid="tab-campaigns">
+            <Megaphone className="mr-2 h-4 w-4" />
+            Campaigns
           </TabsTrigger>
           <TabsTrigger value="users" data-testid="tab-users">
             <Users className="mr-2 h-4 w-4" />
@@ -252,6 +336,177 @@ export default function Admin() {
                   <AlertCircle className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
                   <p className="font-medium">No disputed matches</p>
                   <p className="text-sm text-muted-foreground">All matches are resolved</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="campaigns" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle>Campaigns</CardTitle>
+                <CardDescription>Manage platform competitions and prize pools</CardDescription>
+              </div>
+              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-create-campaign">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Campaign
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Create New Campaign</DialogTitle>
+                    <DialogDescription>
+                      Set up a new competition with a prize pool
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Campaign Name</Label>
+                      <Input 
+                        id="name" 
+                        value={campaignForm.name}
+                        onChange={(e) => setCampaignForm(p => ({ ...p, name: e.target.value }))}
+                        placeholder="Winter Championship 2024"
+                        data-testid="input-campaign-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea 
+                        id="description" 
+                        value={campaignForm.description}
+                        onChange={(e) => setCampaignForm(p => ({ ...p, description: e.target.value }))}
+                        placeholder="Compete for glory and credits..."
+                        data-testid="input-campaign-description"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="prizePool">Prize Pool (credits)</Label>
+                        <Input 
+                          id="prizePool" 
+                          type="number"
+                          value={campaignForm.prizePoolCredits}
+                          onChange={(e) => setCampaignForm(p => ({ ...p, prizePoolCredits: parseInt(e.target.value) || 0 }))}
+                          data-testid="input-prize-pool"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="rewardPerWin">Reward Per Win</Label>
+                        <Input 
+                          id="rewardPerWin" 
+                          type="number"
+                          value={campaignForm.rewardPerWin}
+                          onChange={(e) => setCampaignForm(p => ({ ...p, rewardPerWin: parseInt(e.target.value) || 0 }))}
+                          data-testid="input-reward-per-win"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="startDate">Start Date</Label>
+                        <Input 
+                          id="startDate" 
+                          type="date"
+                          value={campaignForm.startDate}
+                          onChange={(e) => setCampaignForm(p => ({ ...p, startDate: e.target.value }))}
+                          data-testid="input-start-date"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="endDate">End Date</Label>
+                        <Input 
+                          id="endDate" 
+                          type="date"
+                          value={campaignForm.endDate}
+                          onChange={(e) => setCampaignForm(p => ({ ...p, endDate: e.target.value }))}
+                          data-testid="input-end-date"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={() => createCampaignMutation.mutate()}
+                      disabled={!campaignForm.name || createCampaignMutation.isPending}
+                      data-testid="button-submit-campaign"
+                    >
+                      {createCampaignMutation.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Create Campaign
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent>
+              {campaignsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
+                </div>
+              ) : allCampaigns && allCampaigns.length > 0 ? (
+                <div className="space-y-4">
+                  {allCampaigns.map((campaign) => (
+                    <div key={campaign.id} className="rounded-md border p-4" data-testid={`row-campaign-${campaign.id}`}>
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                        <div>
+                          <h3 className="font-semibold">{campaign.name}</h3>
+                          {campaign.description && (
+                            <p className="text-sm text-muted-foreground mt-1">{campaign.description}</p>
+                          )}
+                        </div>
+                        <Badge variant={campaign.status === "active" ? "default" : "secondary"}>
+                          {campaign.status}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
+                        <div>
+                          <p className="text-muted-foreground">Prize Pool</p>
+                          <p className="font-medium">{campaign.prizePoolCredits.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Remaining</p>
+                          <p className="font-medium">{campaign.remainingPoolCredits.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Per Win</p>
+                          <p className="font-medium">{campaign.rewardPerWin}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Ends</p>
+                          <p className="font-medium">{format(new Date(campaign.endDate), "MMM d, yyyy")}</p>
+                        </div>
+                      </div>
+                      {campaign.status === "active" && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          onClick={() => endCampaignMutation.mutate(campaign.id)}
+                          disabled={endCampaignMutation.isPending}
+                          data-testid={`button-end-campaign-${campaign.id}`}
+                        >
+                          {endCampaignMutation.isPending && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          End Campaign
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <Megaphone className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+                  <p className="font-medium">No campaigns yet</p>
+                  <p className="text-sm text-muted-foreground">Create your first campaign to get started</p>
                 </div>
               )}
             </CardContent>

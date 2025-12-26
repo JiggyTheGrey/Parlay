@@ -1,12 +1,20 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
-import { Swords, Users, Wallet, Shield, TrendingUp, Zap } from "lucide-react";
+import { Swords, Users, Wallet, Shield, TrendingUp, Zap, Trophy, Calendar, Coins } from "lucide-react";
 import heroImage from "@assets/generated_images/bloodstrike_hero_action_scene.png";
 import battleBanner from "@assets/banner_parlay_1766688349033.png";
+import { useQuery } from "@tanstack/react-query";
+import type { Campaign } from "@shared/schema";
+import { format } from "date-fns";
+import { Link } from "wouter";
 
 export default function Landing() {
+  const { data: campaigns } = useQuery<Campaign[]>({
+    queryKey: ["/api/campaigns/active"],
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -88,6 +96,63 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {campaigns && campaigns.length > 0 && (
+        <section className="py-16 bg-muted/30" data-testid="section-campaigns">
+          <div className="container">
+            <div className="mx-auto max-w-2xl text-center mb-10">
+              <Badge variant="secondary" className="mb-4">
+                <Trophy className="mr-1 h-3 w-3" />
+                Active Campaigns
+              </Badge>
+              <h2 className="text-3xl font-bold md:text-4xl">
+                Join the Competition
+              </h2>
+              <p className="mt-4 text-muted-foreground">
+                Participate in platform-wide competitions and win credits from the prize pool
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {campaigns.map((campaign) => (
+                <Card key={campaign.id} className="overflow-hidden" data-testid={`card-campaign-${campaign.id}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-lg">{campaign.name}</CardTitle>
+                      <Badge variant="default" className="shrink-0">Active</Badge>
+                    </div>
+                    {campaign.description && (
+                      <CardDescription className="line-clamp-2">{campaign.description}</CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Coins className="h-4 w-4 text-primary" />
+                        <span>Prize Pool: <span className="font-semibold text-foreground">{campaign.prizePoolCredits.toLocaleString()}</span></span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Trophy className="h-4 w-4 text-primary" />
+                        <span>Per Win: <span className="font-semibold text-foreground">{campaign.rewardPerWin}</span></span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>Ends {format(new Date(campaign.endDate), "MMM d, yyyy")}</span>
+                    </div>
+                    <Link href={`/campaigns/${campaign.id}`}>
+                      <Button className="w-full gap-2" data-testid={`button-view-campaign-${campaign.id}`}>
+                        <Swords className="h-4 w-4" />
+                        View Campaign
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="py-20">
         <div className="container">
