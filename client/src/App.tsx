@@ -73,24 +73,22 @@ function Router() {
   }
 
   return (
-    <AuthenticatedLayout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/teams" component={Teams} />
-        <Route path="/teams/create" component={TeamCreate} />
-        <Route path="/teams/:id" component={TeamDetail} />
-        <Route path="/matches" component={Matches} />
-        <Route path="/matches/create" component={MatchCreate} />
-        <Route path="/matches/:id" component={MatchDetail} />
-        <Route path="/wallet" component={Wallet} />
-        <Route path="/history" component={History} />
-        <Route path="/campaigns/:id" component={Campaign} />
-        <Route path="/admin" component={Admin} />
-        <Route path="/battle/:token" component={BattleChallenge} />
-        <Route component={NotFound} />
-      </Switch>
-    </AuthenticatedLayout>
+    <Switch>
+      <Route path="/" component={Landing} />
+      <Route path="/dashboard">{() => <AuthenticatedLayout><Dashboard /></AuthenticatedLayout>}</Route>
+      <Route path="/teams">{() => <AuthenticatedLayout><Teams /></AuthenticatedLayout>}</Route>
+      <Route path="/teams/create">{() => <AuthenticatedLayout><TeamCreate /></AuthenticatedLayout>}</Route>
+      <Route path="/teams/:id">{(params) => <AuthenticatedLayout><TeamDetail /></AuthenticatedLayout>}</Route>
+      <Route path="/matches">{() => <AuthenticatedLayout><Matches /></AuthenticatedLayout>}</Route>
+      <Route path="/matches/create">{() => <AuthenticatedLayout><MatchCreate /></AuthenticatedLayout>}</Route>
+      <Route path="/matches/:id">{(params) => <AuthenticatedLayout><MatchDetail /></AuthenticatedLayout>}</Route>
+      <Route path="/wallet">{() => <AuthenticatedLayout><Wallet /></AuthenticatedLayout>}</Route>
+      <Route path="/history">{() => <AuthenticatedLayout><History /></AuthenticatedLayout>}</Route>
+      <Route path="/campaigns/:id" component={Campaign} />
+      <Route path="/admin">{() => <AuthenticatedLayout><Admin /></AuthenticatedLayout>}</Route>
+      <Route path="/battle/:token" component={BattleChallenge} />
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
