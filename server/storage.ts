@@ -6,6 +6,9 @@ import {
   matches,
   transactions,
   creditPurchases,
+  campaigns,
+  campaignParticipants,
+  campaignMatches,
   type User,
   type UpsertUser,
   type Team,
@@ -24,6 +27,13 @@ import {
   type InvitationStatus,
   type CreditPurchase,
   type InsertCreditPurchase,
+  type Campaign,
+  type InsertCampaign,
+  type CampaignParticipant,
+  type CampaignMatch,
+  type CampaignStatus,
+  type CampaignWithDetails,
+  type CampaignParticipantWithTeam,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
@@ -73,6 +83,27 @@ export interface IStorage {
   createCreditPurchase(purchase: InsertCreditPurchase): Promise<CreditPurchase>;
   getCreditPurchaseBySessionId(sessionId: string): Promise<CreditPurchase | undefined>;
   getUserCreditPurchases(userId: string): Promise<CreditPurchase[]>;
+  
+  getTeamMemberCount(teamId: string): Promise<number>;
+  
+  getCampaigns(status?: CampaignStatus): Promise<Campaign[]>;
+  getCampaign(id: string): Promise<Campaign | undefined>;
+  getCampaignWithDetails(id: string): Promise<CampaignWithDetails | undefined>;
+  createCampaign(campaign: InsertCampaign): Promise<Campaign>;
+  updateCampaignStatus(id: string, status: CampaignStatus): Promise<Campaign>;
+  updateCampaignRemainingPool(id: string, amount: number): Promise<Campaign>;
+  
+  getCampaignParticipants(campaignId: string): Promise<CampaignParticipantWithTeam[]>;
+  getCampaignParticipant(campaignId: string, teamId: string): Promise<CampaignParticipant | undefined>;
+  joinCampaign(campaignId: string, teamId: string): Promise<CampaignParticipant>;
+  updateCampaignParticipantStats(participantId: string, won: boolean, rewardCredits: number): Promise<CampaignParticipant>;
+  
+  getCampaignMatchesBetweenTeams(campaignId: string, team1Id: string, team2Id: string): Promise<CampaignMatch[]>;
+  createCampaignMatch(campaignId: string, matchId: string, team1Id: string, team2Id: string): Promise<CampaignMatch>;
+  completeCampaignMatch(matchId: string, winnerId: string, reward: number): Promise<CampaignMatch>;
+  getCampaignMatchByMatchId(matchId: string): Promise<CampaignMatch | undefined>;
+  
+  getAllUsers(): Promise<User[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -552,6 +583,172 @@ export class DatabaseStorage implements IStorage {
       .from(creditPurchases)
       .where(eq(creditPurchases.userId, userId))
       .orderBy(desc(creditPurchases.createdAt));
+  }
+
+  async getTeamMemberCount(teamId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(teamMembers)
+      .where(eq(teamMembers.teamId, teamId));
+    return Number(result[0]?.count || 0);
+  }
+
+  async getCampaigns(status?: CampaignStatus): Promise<Campaign[]> {
+    if (status) {
+      return db
+        .select()
+        .from(campaigns)
+        .where(eq(campaigns.status, status))
+        .orderBy(desc(campaigns.createdAt));
+    }
+    return db.select().from(campaigns).orderBy(desc(campaigns.createdAt));
+  }
+
+  async getCampaign(id: string): Promise<Campaign | undefined> {
+    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+    return campaign;
+  }
+
+  async getCampaignWithDetails(id: string): Promise<CampaignWithDetails | undefined> {
+    const campaign = await this.getCampaign(id);
+    if (!campaign) return undefined;
+
+    const creator = await this.getUser(campaign.createdBy);
+    const participants = await this.getCampaignParticipants(id);
+
+    return {
+      ...campaign,
+      creator: creator!,
+      participants,
+    };
+  }
+
+  async createCampaign(campaignData: InsertCampaign): Promise<Campaign> {
+    const [campaign] = await db
+      .insert(campaigns)
+      .values({
+        ...campaignData,
+        remainingPoolCredits: campaignData.prizePoolCredits,
+        status: "active",
+      })
+      .returning();
+    return campaign;
+  }
+
+  async updateCampaignStatus(id: string, status: CampaignStatus): Promise<Campaign> {
+    const [campaign] = await db
+      .update(campaigns)
+      .set({ status })
+      .where(eq(campaigns.id, id))
+      .returning();
+    return campaign;
+  }
+
+  async updateCampaignRemainingPool(id: string, amount: number): Promise<Campaign> {
+    const [campaign] = await db
+      .update(campaigns)
+      .set({
+        remainingPoolCredits: sql`${campaigns.remainingPoolCredits} + ${amount}`,
+      })
+      .where(eq(campaigns.id, id))
+      .returning();
+    return campaign;
+  }
+
+  async getCampaignParticipants(campaignId: string): Promise<CampaignParticipantWithTeam[]> {
+    const participants = await db
+      .select()
+      .from(campaignParticipants)
+      .where(eq(campaignParticipants.campaignId, campaignId))
+      .orderBy(desc(campaignParticipants.creditsWon));
+
+    return Promise.all(
+      participants.map(async (participant) => {
+        const team = await this.getTeam(participant.teamId);
+        return { ...participant, team: team! };
+      })
+    );
+  }
+
+  async getCampaignParticipant(campaignId: string, teamId: string): Promise<CampaignParticipant | undefined> {
+    const [participant] = await db
+      .select()
+      .from(campaignParticipants)
+      .where(
+        and(
+          eq(campaignParticipants.campaignId, campaignId),
+          eq(campaignParticipants.teamId, teamId)
+        )
+      );
+    return participant;
+  }
+
+  async joinCampaign(campaignId: string, teamId: string): Promise<CampaignParticipant> {
+    const [participant] = await db
+      .insert(campaignParticipants)
+      .values({ campaignId, teamId })
+      .returning();
+    return participant;
+  }
+
+  async updateCampaignParticipantStats(participantId: string, won: boolean, rewardCredits: number): Promise<CampaignParticipant> {
+    const updateData: any = {
+      matchesPlayed: sql`${campaignParticipants.matchesPlayed} + 1`,
+    };
+    if (won) {
+      updateData.matchesWon = sql`${campaignParticipants.matchesWon} + 1`;
+      updateData.creditsWon = sql`${campaignParticipants.creditsWon} + ${rewardCredits}`;
+    }
+    const [participant] = await db
+      .update(campaignParticipants)
+      .set(updateData)
+      .where(eq(campaignParticipants.id, participantId))
+      .returning();
+    return participant;
+  }
+
+  async getCampaignMatchesBetweenTeams(campaignId: string, team1Id: string, team2Id: string): Promise<CampaignMatch[]> {
+    return db
+      .select()
+      .from(campaignMatches)
+      .where(
+        and(
+          eq(campaignMatches.campaignId, campaignId),
+          or(
+            and(eq(campaignMatches.team1Id, team1Id), eq(campaignMatches.team2Id, team2Id)),
+            and(eq(campaignMatches.team1Id, team2Id), eq(campaignMatches.team2Id, team1Id))
+          )
+        )
+      );
+  }
+
+  async createCampaignMatch(campaignId: string, matchId: string, team1Id: string, team2Id: string): Promise<CampaignMatch> {
+    const [campaignMatch] = await db
+      .insert(campaignMatches)
+      .values({ campaignId, matchId, team1Id, team2Id })
+      .returning();
+    return campaignMatch;
+  }
+
+  async completeCampaignMatch(matchId: string, winnerId: string, reward: number): Promise<CampaignMatch> {
+    const [campaignMatch] = await db
+      .update(campaignMatches)
+      .set({ winnerId, rewardAwarded: reward })
+      .where(eq(campaignMatches.matchId, matchId))
+      .returning();
+    return campaignMatch;
+  }
+
+  async getCampaignMatchByMatchId(matchId: string): Promise<CampaignMatch | undefined> {
+    const [campaignMatch] = await db
+      .select()
+      .from(campaignMatches)
+      .where(eq(campaignMatches.matchId, matchId));
+    return campaignMatch;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.createdAt));
   }
 }
 
