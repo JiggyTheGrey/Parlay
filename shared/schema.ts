@@ -146,6 +146,7 @@ export const campaigns = pgTable("campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
+  bannerImage: text("banner_image"),
   prizePoolCredits: integer("prize_pool_credits").notNull(),
   remainingPoolCredits: integer("remaining_pool_credits").notNull(),
   rewardPerWin: integer("reward_per_win").notNull(),

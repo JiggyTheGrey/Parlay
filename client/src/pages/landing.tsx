@@ -117,6 +117,16 @@ export default function Landing() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {campaigns.map((campaign) => (
                 <Card key={campaign.id} className="overflow-hidden" data-testid={`card-campaign-${campaign.id}`}>
+                  {campaign.bannerImage && (
+                    <div className="relative h-32 overflow-hidden">
+                      <img 
+                        src={campaign.bannerImage} 
+                        alt={campaign.name}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent" />
+                    </div>
+                  )}
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between gap-2">
                       <CardTitle className="text-lg">{campaign.name}</CardTitle>

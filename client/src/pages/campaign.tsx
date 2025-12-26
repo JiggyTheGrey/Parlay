@@ -139,6 +139,16 @@ export default function CampaignPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {campaign.bannerImage && (
+        <div className="relative h-48 md:h-64 overflow-hidden">
+          <img 
+            src={campaign.bannerImage} 
+            alt={campaign.name}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
+        </div>
+      )}
       <div className="container py-8">
         <Button 
           variant="ghost" 

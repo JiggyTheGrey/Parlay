@@ -71,6 +71,7 @@ export default function Admin() {
   const [campaignForm, setCampaignForm] = useState({
     name: "",
     description: "",
+    bannerImage: "",
     prizePoolCredits: 10000,
     rewardPerWin: 100,
     startDate: format(new Date(), "yyyy-MM-dd"),
@@ -104,6 +105,7 @@ export default function Admin() {
       setCampaignForm({
         name: "",
         description: "",
+        bannerImage: "",
         prizePoolCredits: 10000,
         rewardPerWin: 100,
         startDate: format(new Date(), "yyyy-MM-dd"),
@@ -382,6 +384,16 @@ export default function Admin() {
                         onChange={(e) => setCampaignForm(p => ({ ...p, description: e.target.value }))}
                         placeholder="Compete for glory and credits..."
                         data-testid="input-campaign-description"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bannerImage">Banner Image URL (optional)</Label>
+                      <Input 
+                        id="bannerImage" 
+                        value={campaignForm.bannerImage}
+                        onChange={(e) => setCampaignForm(p => ({ ...p, bannerImage: e.target.value }))}
+                        placeholder="/attached_assets/banner.png"
+                        data-testid="input-campaign-banner"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
