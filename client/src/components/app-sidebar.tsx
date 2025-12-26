@@ -58,7 +58,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 cursor-pointer" data-testid="link-logo">
           <img src={logoImage} alt="Parlay-it" className="h-10 w-auto" />
         </Link>
       </SidebarHeader>
