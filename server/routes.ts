@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertTeamSchema, insertMatchSchema, insertCampaignSchema, type MatchStatus, type CampaignStatus, CREDIT_PACKAGES } from "@shared/schema";
 import { z } from "zod";
-import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
+import { getPaystackPublicKey, initializePaystackTransaction, verifyPaystackTransaction } from "./paystackClient";
 
 const MAX_TEAM_MEMBERS = 5;
 
@@ -694,13 +694,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(CREDIT_PACKAGES);
   });
 
-  app.get("/api/stripe/publishable-key", async (req, res) => {
+  app.get("/api/paystack/public-key", async (req, res) => {
     try {
-      const publishableKey = await getStripePublishableKey();
-      res.json({ publishableKey });
+      const publicKey = getPaystackPublicKey();
+      res.json({ publicKey });
     } catch (error) {
-      console.error("Error getting Stripe key:", error);
-      res.status(500).json({ message: "Failed to get Stripe configuration" });
+      console.error("Error getting Paystack key:", error);
+      res.status(500).json({ message: "Failed to get Paystack configuration" });
     }
   });
 
@@ -714,57 +714,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid package" });
       }
 
-      const stripe = await getUncachableStripeClient();
-      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      const user = await storage.getUser(userId);
+      if (!user?.email) {
+        return res.status(400).json({ message: "User email required for payment" });
+      }
 
+      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
       const totalCredits = creditPackage.credits + (('bonus' in creditPackage) ? (creditPackage as any).bonus : 0);
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: creditPackage.name,
-              description: `${totalCredits} credits${('bonus' in creditPackage) ? ` (includes ${(creditPackage as any).bonus} bonus credits)` : ''}`,
-            },
-            unit_amount: creditPackage.priceUsd,
-          },
-          quantity: 1,
-        }],
-        mode: 'payment',
-        success_url: `${baseUrl}/wallet?success=true&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/wallet?canceled=true`,
-        metadata: {
+      // Generate unique reference
+      const reference = `parlay_${userId}_${packageId}_${Date.now()}`;
+
+      // Convert USD cents to NGN kobo (approximate rate, or use fixed kobo amount)
+      // For now, we'll pass the amount in kobo - Paystack expects kobo for NGN
+      // You may need to adjust pricing for your local currency
+      const amountKobo = creditPackage.priceUsd * 10; // Simple conversion - adjust as needed
+
+      const paystackResponse = await initializePaystackTransaction(
+        user.email,
+        amountKobo,
+        reference,
+        {
           userId,
           packageId,
           creditsToAward: totalCredits.toString(),
         },
-      });
+        `${baseUrl}/wallet?reference=${reference}`
+      );
 
-      res.json({ url: session.url });
+      res.json({ 
+        url: paystackResponse.data.authorization_url,
+        reference: paystackResponse.data.reference,
+        accessCode: paystackResponse.data.access_code
+      });
     } catch (error) {
       console.error("Error creating checkout session:", error);
       res.status(500).json({ message: "Failed to create checkout session" });
     }
   });
 
-  app.get("/api/credits/verify/:sessionId", isAuthenticated, async (req: any, res) => {
+  app.get("/api/credits/verify/:reference", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { sessionId } = req.params;
+      const { reference } = req.params;
 
-      const stripe = await getUncachableStripeClient();
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const paystackResponse = await verifyPaystackTransaction(reference);
 
-      if (session.metadata?.userId !== userId) {
-        return res.status(403).json({ message: "Session does not belong to user" });
+      if (paystackResponse.data.metadata?.userId !== userId) {
+        return res.status(403).json({ message: "Transaction does not belong to user" });
       }
 
-      if (session.payment_status === 'paid') {
-        const creditsToAward = parseInt(session.metadata?.creditsToAward || '0');
+      if (paystackResponse.data.status === 'success') {
+        const creditsToAward = parseInt(paystackResponse.data.metadata?.creditsToAward || '0');
         
-        const existingPurchase = await storage.getCreditPurchaseBySessionId(sessionId);
+        const existingPurchase = await storage.getCreditPurchaseBySessionId(reference);
         if (existingPurchase) {
           return res.json({ 
             success: true, 
@@ -775,10 +778,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         await storage.createCreditPurchase({
           userId,
-          packageId: session.metadata?.packageId || '',
+          packageId: paystackResponse.data.metadata?.packageId || '',
           creditsAwarded: creditsToAward,
-          amountPaidCents: session.amount_total || 0,
-          stripeSessionId: sessionId,
+          amountPaidCents: paystackResponse.data.amount / 100,
+          stripeSessionId: reference, // Reusing field for Paystack reference
         });
 
         const user = await storage.updateUserCredits(userId, creditsToAward);
@@ -794,7 +797,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ success: true, credits: creditsToAward, user });
       }
 
-      res.json({ success: false, status: session.payment_status });
+      res.json({ success: false, status: paystackResponse.data.status });
     } catch (error) {
       console.error("Error verifying purchase:", error);
       res.status(500).json({ message: "Failed to verify purchase" });

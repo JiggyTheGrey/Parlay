@@ -62,12 +62,14 @@ export default function WalletPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const success = params.get("success");
-    const sessionId = params.get("session_id");
+    const reference = params.get("reference");
+    const trxref = params.get("trxref");
     const canceled = params.get("canceled");
 
-    if (success === "true" && sessionId) {
-      fetch(`/api/credits/verify/${sessionId}`, {
+    const paymentRef = reference || trxref;
+    
+    if (paymentRef) {
+      fetch(`/api/credits/verify/${paymentRef}`, {
         credentials: "include",
       })
         .then((res) => res.json())
@@ -79,6 +81,12 @@ export default function WalletPage() {
             });
             queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
             queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+          } else {
+            toast({ 
+              title: "Payment pending", 
+              description: "Your payment is being processed. Credits will be added once confirmed.",
+              variant: "default"
+            });
           }
           window.history.replaceState({}, document.title, "/wallet");
         })
@@ -251,7 +259,7 @@ export default function WalletPage() {
             </div>
           )}
           <p className="text-xs text-muted-foreground text-center mt-4">
-            Secure payment powered by Stripe. Credits are non-refundable.
+            Secure payment powered by Paystack. Credits are non-refundable.
           </p>
         </CardContent>
       </Card>
