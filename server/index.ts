@@ -82,6 +82,10 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Serve attached_assets directory for campaign banners and other uploaded assets
+import path from "path";
+app.use('/attached_assets', express.static(path.resolve(process.cwd(), 'attached_assets')));
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
