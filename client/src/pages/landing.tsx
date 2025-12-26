@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Swords, Users, Wallet, Shield, TrendingUp, Zap, Trophy, Calendar, Coins } from "lucide-react";
 import heroImage from "@assets/generated_images/bloodstrike_hero_action_scene.png";
 import battleBanner from "@assets/banner_parlay_1766688349033.png";
+import logoImage from "@assets/Logo_parlay_1766742512751.png";
 import { useQuery } from "@tanstack/react-query";
 import type { Campaign } from "@shared/schema";
 import { format } from "date-fns";
@@ -288,10 +289,7 @@ export default function Landing() {
         <div className="container">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-                <span className="font-mono text-sm font-bold text-primary-foreground">PI</span>
-              </div>
-              <span className="font-bold">Parlay-it</span>
+              <img src={logoImage} alt="Parlay-it" className="h-10 w-auto" />
             </div>
             <p className="text-sm text-muted-foreground">
               2024 Parlay-it. Competitive wagering for serious gamers.

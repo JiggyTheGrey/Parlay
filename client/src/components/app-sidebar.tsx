@@ -21,6 +21,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import logoImage from "@assets/Logo_parlay_1766742512751.png";
 
 const mainNavItems = [
   {
@@ -58,10 +59,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-gradient">
-            <span className="font-mono text-sm font-bold text-primary-foreground">PI</span>
-          </div>
-          <span className="font-bold text-lg text-primary-gradient">Parlay-it</span>
+          <img src={logoImage} alt="Parlay-it" className="h-10 w-auto" />
         </Link>
       </SidebarHeader>
       <SidebarContent>
