@@ -97,6 +97,7 @@ export const matches = pgTable("matches", {
   challengerTeamId: varchar("challenger_team_id").notNull().references(() => teams.id),
   challengedTeamId: varchar("challenged_team_id").notNull().references(() => teams.id),
   wagerCredits: integer("wager_credits").notNull(),
+  campaignId: varchar("campaign_id"),
   status: varchar("status", { length: 20 }).default("pending").notNull().$type<MatchStatus>(),
   game: varchar("game", { length: 50 }).default("bloodstrike").notNull(),
   gameMode: varchar("game_mode", { length: 50 }).default("standard").notNull(),
@@ -137,8 +138,49 @@ export const creditPurchases = pgTable("credit_purchases", {
   completedAt: timestamp("completed_at"),
 });
 
+// Campaign status
+export type CampaignStatus = "draft" | "active" | "completed" | "cancelled";
+
+// Campaigns table
+export const campaigns = pgTable("campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  prizePoolCredits: integer("prize_pool_credits").notNull(),
+  remainingPoolCredits: integer("remaining_pool_credits").notNull(),
+  rewardPerWin: integer("reward_per_win").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  status: varchar("status", { length: 20 }).default("draft").notNull().$type<CampaignStatus>(),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Campaign participants (teams that joined a campaign)
+export const campaignParticipants = pgTable("campaign_participants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => campaigns.id),
+  teamId: varchar("team_id").notNull().references(() => teams.id),
+  creditsWon: integer("credits_won").default(0).notNull(),
+  matchesPlayed: integer("matches_played").default(0).notNull(),
+  matchesWon: integer("matches_won").default(0).notNull(),
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+// Campaign matches (tracks battles within a campaign to enforce the 2-battle limit)
+export const campaignMatches = pgTable("campaign_matches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => campaigns.id),
+  matchId: varchar("match_id").notNull().references(() => matches.id),
+  team1Id: varchar("team1_id").notNull().references(() => teams.id),
+  team2Id: varchar("team2_id").notNull().references(() => teams.id),
+  winnerId: varchar("winner_id").references(() => teams.id),
+  rewardAwarded: integer("reward_awarded"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Transaction types
-export type TransactionType = "credit_purchase" | "wager_lock" | "wager_win" | "wager_loss" | "wager_refund" | "team_contribution" | "team_payout";
+export type TransactionType = "credit_purchase" | "wager_lock" | "wager_win" | "wager_loss" | "wager_refund" | "team_contribution" | "team_payout" | "campaign_reward";
 
 // Transactions table
 export const transactions = pgTable("transactions", {
@@ -237,6 +279,52 @@ export const creditPurchasesRelations = relations(creditPurchases, ({ one }) => 
   }),
 }));
 
+export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [campaigns.createdBy],
+    references: [users.id],
+  }),
+  participants: many(campaignParticipants),
+  campaignMatches: many(campaignMatches),
+}));
+
+export const campaignParticipantsRelations = relations(campaignParticipants, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [campaignParticipants.campaignId],
+    references: [campaigns.id],
+  }),
+  team: one(teams, {
+    fields: [campaignParticipants.teamId],
+    references: [teams.id],
+  }),
+}));
+
+export const campaignMatchesRelations = relations(campaignMatches, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [campaignMatches.campaignId],
+    references: [campaigns.id],
+  }),
+  match: one(matches, {
+    fields: [campaignMatches.matchId],
+    references: [matches.id],
+  }),
+  team1: one(teams, {
+    fields: [campaignMatches.team1Id],
+    references: [teams.id],
+    relationName: "campaignTeam1",
+  }),
+  team2: one(teams, {
+    fields: [campaignMatches.team2Id],
+    references: [teams.id],
+    relationName: "campaignTeam2",
+  }),
+  winner: one(teams, {
+    fields: [campaignMatches.winnerId],
+    references: [teams.id],
+    relationName: "campaignWinner",
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -285,6 +373,28 @@ export const insertCreditPurchaseSchema = createInsertSchema(creditPurchases).om
   status: true,
 });
 
+export const insertCampaignSchema = createInsertSchema(campaigns).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+  remainingPoolCredits: true,
+});
+
+export const insertCampaignParticipantSchema = createInsertSchema(campaignParticipants).omit({
+  id: true,
+  joinedAt: true,
+  creditsWon: true,
+  matchesPlayed: true,
+  matchesWon: true,
+});
+
+export const insertCampaignMatchSchema = createInsertSchema(campaignMatches).omit({
+  id: true,
+  createdAt: true,
+  winnerId: true,
+  rewardAwarded: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -323,4 +433,22 @@ export type MatchWithTeams = Match & {
   challengerTeam: Team;
   challengedTeam: Team;
   winner?: Team;
+};
+
+export type Campaign = typeof campaigns.$inferSelect;
+export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
+
+export type CampaignParticipant = typeof campaignParticipants.$inferSelect;
+export type InsertCampaignParticipant = z.infer<typeof insertCampaignParticipantSchema>;
+
+export type CampaignMatch = typeof campaignMatches.$inferSelect;
+export type InsertCampaignMatch = z.infer<typeof insertCampaignMatchSchema>;
+
+export type CampaignWithDetails = Campaign & {
+  creator: User;
+  participants: (CampaignParticipant & { team: Team })[];
+};
+
+export type CampaignParticipantWithTeam = CampaignParticipant & {
+  team: Team;
 };
