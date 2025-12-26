@@ -2,9 +2,11 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertTeamSchema, insertMatchSchema, type MatchStatus, CREDIT_PACKAGES } from "@shared/schema";
+import { insertTeamSchema, insertMatchSchema, insertCampaignSchema, type MatchStatus, type CampaignStatus, CREDIT_PACKAGES } from "@shared/schema";
 import { z } from "zod";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
+
+const MAX_TEAM_MEMBERS = 5;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -103,6 +105,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isMember = await storage.isTeamMember(teamId, userId);
       if (isMember) {
         return res.status(400).json({ message: "Already a member" });
+      }
+
+      const memberCount = await storage.getTeamMemberCount(teamId);
+      if (memberCount >= MAX_TEAM_MEMBERS) {
+        return res.status(400).json({ message: `Team is full (max ${MAX_TEAM_MEMBERS} members)` });
       }
 
       const member = await storage.joinTeam(teamId, userId);
@@ -229,6 +236,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isMember) {
         await storage.updateInvitationStatus(invitation.id, "accepted");
         return res.status(400).json({ message: "Already a member of this team" });
+      }
+
+      const memberCount = await storage.getTeamMemberCount(invitation.teamId);
+      if (memberCount >= MAX_TEAM_MEMBERS) {
+        return res.status(400).json({ message: `Team is full (max ${MAX_TEAM_MEMBERS} members)` });
       }
 
       await storage.joinTeam(invitation.teamId, userId);
@@ -504,19 +516,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? match.challengedTeamId
             : match.challengerTeamId;
 
-          const totalPot = match.wagerCredits * 2;
-          await storage.updateTeamCredits(finalWinnerId, totalPot);
+          // Check if this is a campaign match
+          const campaignMatch = match.campaignId 
+            ? await storage.getCampaignMatchByMatchId(match.id)
+            : null;
+
+          if (campaignMatch && match.campaignId) {
+            // Campaign match - award reward from pool
+            const campaign = await storage.getCampaign(match.campaignId);
+            if (campaign && campaign.remainingPoolCredits >= campaign.rewardPerWin) {
+              const reward = campaign.rewardPerWin;
+              
+              await storage.updateTeamCredits(finalWinnerId, reward);
+              await storage.updateCampaignRemainingPool(match.campaignId, -reward);
+              await storage.completeCampaignMatch(match.id, finalWinnerId, reward);
+              
+              // Update participant stats
+              const winnerParticipant = await storage.getCampaignParticipant(match.campaignId, finalWinnerId);
+              const loserParticipant = await storage.getCampaignParticipant(match.campaignId, loserId);
+              
+              if (winnerParticipant) {
+                await storage.updateCampaignParticipantStats(winnerParticipant.id, true, reward);
+              }
+              if (loserParticipant) {
+                await storage.updateCampaignParticipantStats(loserParticipant.id, false, 0);
+              }
+
+              await storage.createTransaction({
+                teamId: finalWinnerId,
+                matchId: match.id,
+                type: "campaign_reward",
+                credits: reward,
+                description: `Campaign reward - ${campaign.name}`,
+              });
+            }
+          } else if (match.wagerCredits > 0) {
+            // Regular wager match
+            const totalPot = match.wagerCredits * 2;
+            await storage.updateTeamCredits(finalWinnerId, totalPot);
+
+            await storage.createTransaction({
+              teamId: finalWinnerId,
+              matchId: match.id,
+              type: "wager_win",
+              credits: totalPot,
+              description: "Match won - prize collected",
+            });
+          }
+
           await storage.updateTeamStats(finalWinnerId, true);
           await storage.updateTeamStats(loserId, false);
-
-          await storage.createTransaction({
-            teamId: finalWinnerId,
-            matchId: match.id,
-            type: "wager_win",
-            credits: totalPot,
-            description: "Match won - prize collected",
-          });
-
           await storage.setMatchWinner(matchId, finalWinnerId);
         } else {
           await storage.updateMatchStatus(matchId, "disputed");
@@ -749,6 +798,234 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error verifying purchase:", error);
       res.status(500).json({ message: "Failed to verify purchase" });
+    }
+  });
+
+  // Campaign routes (public)
+  app.get("/api/campaigns", async (req, res) => {
+    try {
+      const status = req.query.status as CampaignStatus | undefined;
+      const campaigns = await storage.getCampaigns(status);
+      res.json(campaigns);
+    } catch (error) {
+      console.error("Error fetching campaigns:", error);
+      res.status(500).json({ message: "Failed to fetch campaigns" });
+    }
+  });
+
+  app.get("/api/campaigns/active", async (req, res) => {
+    try {
+      const campaigns = await storage.getCampaigns("active");
+      res.json(campaigns);
+    } catch (error) {
+      console.error("Error fetching active campaigns:", error);
+      res.status(500).json({ message: "Failed to fetch campaigns" });
+    }
+  });
+
+  app.get("/api/campaigns/:id", async (req, res) => {
+    try {
+      const campaign = await storage.getCampaignWithDetails(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      res.json(campaign);
+    } catch (error) {
+      console.error("Error fetching campaign:", error);
+      res.status(500).json({ message: "Failed to fetch campaign" });
+    }
+  });
+
+  app.get("/api/campaigns/:id/participants", async (req, res) => {
+    try {
+      const participants = await storage.getCampaignParticipants(req.params.id);
+      res.json(participants);
+    } catch (error) {
+      console.error("Error fetching campaign participants:", error);
+      res.status(500).json({ message: "Failed to fetch participants" });
+    }
+  });
+
+  app.post("/api/campaigns/:id/join", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const campaignId = req.params.id;
+      const { teamId } = req.body;
+
+      if (!teamId) {
+        return res.status(400).json({ message: "Team ID is required" });
+      }
+
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      if (campaign.status !== "active") {
+        return res.status(400).json({ message: "Campaign is not active" });
+      }
+
+      const team = await storage.getTeam(teamId);
+      if (!team) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+      if (team.ownerId !== userId) {
+        return res.status(403).json({ message: "Only team captains can join campaigns" });
+      }
+
+      const existingParticipant = await storage.getCampaignParticipant(campaignId, teamId);
+      if (existingParticipant) {
+        return res.status(400).json({ message: "Team already in this campaign" });
+      }
+
+      const participant = await storage.joinCampaign(campaignId, teamId);
+      res.status(201).json(participant);
+    } catch (error) {
+      console.error("Error joining campaign:", error);
+      res.status(500).json({ message: "Failed to join campaign" });
+    }
+  });
+
+  app.get("/api/campaigns/:id/can-battle", isAuthenticated, async (req: any, res) => {
+    try {
+      const campaignId = req.params.id;
+      const { team1Id, team2Id } = req.query;
+
+      if (!team1Id || !team2Id) {
+        return res.status(400).json({ message: "Both team IDs required" });
+      }
+
+      const existingMatches = await storage.getCampaignMatchesBetweenTeams(
+        campaignId,
+        team1Id as string,
+        team2Id as string
+      );
+
+      res.json({ canBattle: existingMatches.length < 2, matchCount: existingMatches.length });
+    } catch (error) {
+      console.error("Error checking battle eligibility:", error);
+      res.status(500).json({ message: "Failed to check eligibility" });
+    }
+  });
+
+  app.post("/api/campaigns/:id/challenge", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const campaignId = req.params.id;
+      const { challengerTeamId, challengedTeamId, game, gameMode, bestOf, message } = req.body;
+
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      if (campaign.status !== "active") {
+        return res.status(400).json({ message: "Campaign is not active" });
+      }
+      if (campaign.remainingPoolCredits < campaign.rewardPerWin) {
+        return res.status(400).json({ message: "Campaign prize pool is depleted" });
+      }
+
+      const isMember = await storage.isTeamMember(challengerTeamId, userId);
+      if (!isMember) {
+        return res.status(403).json({ message: "Not a member of challenger team" });
+      }
+
+      const challengerParticipant = await storage.getCampaignParticipant(campaignId, challengerTeamId);
+      const challengedParticipant = await storage.getCampaignParticipant(campaignId, challengedTeamId);
+      
+      if (!challengerParticipant || !challengedParticipant) {
+        return res.status(400).json({ message: "Both teams must be in the campaign" });
+      }
+
+      const existingMatches = await storage.getCampaignMatchesBetweenTeams(
+        campaignId,
+        challengerTeamId,
+        challengedTeamId
+      );
+      if (existingMatches.length >= 2) {
+        return res.status(400).json({ message: "Teams have already battled twice in this campaign" });
+      }
+
+      const match = await storage.createMatch({
+        challengerTeamId,
+        challengedTeamId,
+        wagerCredits: 0,
+        campaignId,
+        game: game || "bloodstrike",
+        gameMode: gameMode || "standard",
+        bestOf: bestOf || 1,
+        message,
+      });
+
+      await storage.createCampaignMatch(
+        campaignId,
+        match.id,
+        challengerTeamId,
+        challengedTeamId
+      );
+
+      res.status(201).json(match);
+    } catch (error) {
+      console.error("Error creating campaign challenge:", error);
+      res.status(500).json({ message: "Failed to create challenge" });
+    }
+  });
+
+  // Admin campaign routes
+  app.get("/api/admin/users", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/admin/campaigns", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const data = insertCampaignSchema.parse({
+        ...req.body,
+        createdBy: userId,
+        startDate: new Date(req.body.startDate),
+        endDate: new Date(req.body.endDate),
+      });
+
+      const campaign = await storage.createCampaign(data);
+      res.status(201).json(campaign);
+    } catch (error) {
+      console.error("Error creating campaign:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create campaign" });
+    }
+  });
+
+  app.post("/api/admin/campaigns/:id/end", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const campaign = await storage.updateCampaignStatus(req.params.id, "completed");
+      res.json(campaign);
+    } catch (error) {
+      console.error("Error ending campaign:", error);
+      res.status(500).json({ message: "Failed to end campaign" });
     }
   });
 
