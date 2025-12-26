@@ -551,16 +551,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
             }
           } else if (match.wagerCredits > 0) {
-            // Regular wager match
+            // Regular wager match - apply 10% platform fee
             const totalPot = match.wagerCredits * 2;
-            await storage.updateTeamCredits(finalWinnerId, totalPot);
+            const platformFee = Math.floor(totalPot * 0.10);
+            const winnerPayout = totalPot - platformFee;
+            
+            await storage.updateTeamCredits(finalWinnerId, winnerPayout);
 
             await storage.createTransaction({
               teamId: finalWinnerId,
               matchId: match.id,
               type: "wager_win",
-              credits: totalPot,
-              description: "Match won - prize collected",
+              credits: winnerPayout,
+              description: `Match won - prize collected (${platformFee} platform fee deducted)`,
+            });
+
+            // Record platform fee transaction for tracking
+            await storage.createTransaction({
+              matchId: match.id,
+              type: "platform_fee",
+              credits: platformFee,
+              description: `Platform fee (10%) from match ${match.id}`,
             });
           }
 
@@ -669,8 +680,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? match.challengedTeamId
         : match.challengerTeamId;
 
+      // Check if this is a campaign match (no fee for campaign matches)
+      const isCampaignMatch = !!match.campaignId;
       const totalPot = match.wagerCredits * 2;
-      await storage.updateTeamCredits(winnerId, totalPot);
+      
+      let winnerPayout = totalPot;
+      let platformFee = 0;
+      
+      // Apply 10% platform fee only for regular wager matches (not campaign matches)
+      if (!isCampaignMatch && totalPot > 0) {
+        platformFee = Math.floor(totalPot * 0.10);
+        winnerPayout = totalPot - platformFee;
+      }
+      
+      await storage.updateTeamCredits(winnerId, winnerPayout);
       await storage.updateTeamStats(winnerId, true);
       await storage.updateTeamStats(loserId, false);
 
@@ -678,9 +701,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         teamId: winnerId,
         matchId: match.id,
         type: "wager_win",
-        credits: totalPot,
-        description: "Match won - dispute resolved by admin",
+        credits: winnerPayout,
+        description: platformFee > 0 
+          ? `Match won - dispute resolved by admin (${platformFee} platform fee deducted)`
+          : "Match won - dispute resolved by admin",
       });
+      
+      // Record platform fee transaction if applicable
+      if (platformFee > 0) {
+        await storage.createTransaction({
+          matchId: match.id,
+          type: "platform_fee",
+          credits: platformFee,
+          description: `Platform fee (10%) from match ${match.id}`,
+        });
+      }
 
       const updated = await storage.setMatchWinner(matchId, winnerId);
       res.json(updated);

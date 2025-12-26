@@ -181,7 +181,10 @@ export const campaignMatches = pgTable("campaign_matches", {
 });
 
 // Transaction types
-export type TransactionType = "credit_purchase" | "wager_lock" | "wager_win" | "wager_loss" | "wager_refund" | "team_contribution" | "team_payout" | "campaign_reward";
+export type TransactionType = "credit_purchase" | "wager_lock" | "wager_win" | "wager_loss" | "wager_refund" | "team_contribution" | "team_payout" | "campaign_reward" | "platform_fee";
+
+// Platform fee rate (10%)
+export const PLATFORM_FEE_RATE = 0.10;
 
 // Transactions table
 export const transactions = pgTable("transactions", {
