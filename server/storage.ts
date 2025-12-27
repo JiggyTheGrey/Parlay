@@ -9,6 +9,7 @@ import {
   campaigns,
   campaignParticipants,
   campaignMatches,
+  withdrawalRequests,
   type User,
   type UpsertUser,
   type Team,
@@ -34,6 +35,10 @@ import {
   type CampaignStatus,
   type CampaignWithDetails,
   type CampaignParticipantWithTeam,
+  type WithdrawalRequest,
+  type InsertWithdrawalRequest,
+  type WithdrawalRequestWithUser,
+  type WithdrawalStatus,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
@@ -104,6 +109,13 @@ export interface IStorage {
   getCampaignMatchByMatchId(matchId: string): Promise<CampaignMatch | undefined>;
   
   getAllUsers(): Promise<User[]>;
+  
+  updateUserWithdrawableCredits(userId: string, amount: number): Promise<User>;
+  createWithdrawalRequest(request: InsertWithdrawalRequest): Promise<WithdrawalRequest>;
+  getWithdrawalRequests(userId: string): Promise<WithdrawalRequest[]>;
+  getAllWithdrawalRequests(): Promise<WithdrawalRequestWithUser[]>;
+  getPendingWithdrawalRequests(): Promise<WithdrawalRequestWithUser[]>;
+  updateWithdrawalStatus(id: string, status: WithdrawalStatus, processedBy: string, adminNotes?: string): Promise<WithdrawalRequest>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -749,6 +761,82 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async updateUserWithdrawableCredits(userId: string, amount: number): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        withdrawableCredits: sql`${users.withdrawableCredits} + ${amount}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async createWithdrawalRequest(request: InsertWithdrawalRequest): Promise<WithdrawalRequest> {
+    const [withdrawal] = await db
+      .insert(withdrawalRequests)
+      .values(request)
+      .returning();
+    return withdrawal;
+  }
+
+  async getWithdrawalRequests(userId: string): Promise<WithdrawalRequest[]> {
+    return db
+      .select()
+      .from(withdrawalRequests)
+      .where(eq(withdrawalRequests.userId, userId))
+      .orderBy(desc(withdrawalRequests.createdAt));
+  }
+
+  async getAllWithdrawalRequests(): Promise<WithdrawalRequestWithUser[]> {
+    const requests = await db
+      .select()
+      .from(withdrawalRequests)
+      .orderBy(desc(withdrawalRequests.createdAt));
+    
+    return Promise.all(
+      requests.map(async (request) => {
+        const user = await this.getUser(request.userId);
+        return { ...request, user: user! };
+      })
+    );
+  }
+
+  async getPendingWithdrawalRequests(): Promise<WithdrawalRequestWithUser[]> {
+    const requests = await db
+      .select()
+      .from(withdrawalRequests)
+      .where(eq(withdrawalRequests.status, "pending"))
+      .orderBy(desc(withdrawalRequests.createdAt));
+    
+    return Promise.all(
+      requests.map(async (request) => {
+        const user = await this.getUser(request.userId);
+        return { ...request, user: user! };
+      })
+    );
+  }
+
+  async updateWithdrawalStatus(
+    id: string, 
+    status: WithdrawalStatus, 
+    processedBy: string, 
+    adminNotes?: string
+  ): Promise<WithdrawalRequest> {
+    const [withdrawal] = await db
+      .update(withdrawalRequests)
+      .set({
+        status,
+        processedBy,
+        adminNotes,
+        processedAt: new Date(),
+      })
+      .where(eq(withdrawalRequests.id, id))
+      .returning();
+    return withdrawal;
   }
 }
 
