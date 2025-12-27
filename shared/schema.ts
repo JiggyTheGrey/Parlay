@@ -33,6 +33,7 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   credits: integer("credits").default(0).notNull(),
+  withdrawableCredits: integer("withdrawable_credits").default(0).notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -181,7 +182,32 @@ export const campaignMatches = pgTable("campaign_matches", {
 });
 
 // Transaction types
-export type TransactionType = "credit_purchase" | "wager_lock" | "wager_win" | "wager_loss" | "wager_refund" | "team_contribution" | "team_payout" | "campaign_reward" | "platform_fee";
+export type TransactionType = "credit_purchase" | "wager_lock" | "wager_win" | "wager_loss" | "wager_refund" | "team_contribution" | "team_payout" | "campaign_reward" | "platform_fee" | "withdrawal" | "withdrawal_fee";
+
+// Withdrawal status
+export type WithdrawalStatus = "pending" | "approved" | "rejected" | "completed";
+
+// Withdrawal fee (5 credits)
+export const WITHDRAWAL_FEE_CREDITS = 5;
+
+// Withdrawal rate (100 credits = $2.00 = 200 cents)
+export const WITHDRAWAL_RATE_CENTS_PER_100_CREDITS = 200;
+
+// Withdrawal requests table
+export const withdrawalRequests = pgTable("withdrawal_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  creditsRequested: integer("credits_requested").notNull(),
+  feeCredits: integer("fee_credits").notNull(),
+  netCredits: integer("net_credits").notNull(),
+  amountUsdCents: integer("amount_usd_cents").notNull(),
+  status: varchar("status", { length: 20 }).default("pending").notNull().$type<WithdrawalStatus>(),
+  bankDetails: text("bank_details"),
+  adminNotes: text("admin_notes"),
+  processedBy: varchar("processed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
 
 // Platform fee rate (10%)
 export const PLATFORM_FEE_RATE = 0.10;
@@ -206,6 +232,19 @@ export const usersRelations = relations(users, ({ many }) => ({
   ownedTeams: many(teams),
   teamMemberships: many(teamMembers),
   transactions: many(transactions),
+  withdrawalRequests: many(withdrawalRequests),
+}));
+
+export const withdrawalRequestsRelations = relations(withdrawalRequests, ({ one }) => ({
+  user: one(users, {
+    fields: [withdrawalRequests.userId],
+    references: [users.id],
+  }),
+  processor: one(users, {
+    fields: [withdrawalRequests.processedBy],
+    references: [users.id],
+    relationName: "processedWithdrawals",
+  }),
 }));
 
 export const teamsRelations = relations(teams, ({ one, many }) => ({
@@ -399,6 +438,15 @@ export const insertCampaignMatchSchema = createInsertSchema(campaignMatches).omi
   rewardAwarded: true,
 });
 
+export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalRequests).omit({
+  id: true,
+  createdAt: true,
+  processedAt: true,
+  status: true,
+  processedBy: true,
+  adminNotes: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -455,4 +503,11 @@ export type CampaignWithDetails = Campaign & {
 
 export type CampaignParticipantWithTeam = CampaignParticipant & {
   team: Team;
+};
+
+export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;
+export type InsertWithdrawalRequest = z.infer<typeof insertWithdrawalRequestSchema>;
+
+export type WithdrawalRequestWithUser = WithdrawalRequest & {
+  user: User;
 };
