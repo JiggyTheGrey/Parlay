@@ -1066,6 +1066,222 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Team payout to user (captain distributes team credits to member's withdrawable balance)
+  app.post("/api/wallet/payout-from-team", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { teamId, amount, recipientId } = req.body;
+
+      if (!teamId || !amount || amount <= 0) {
+        return res.status(400).json({ message: "Invalid data" });
+      }
+
+      const team = await storage.getTeam(teamId);
+      if (!team) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+
+      // Only team owner can distribute payouts
+      if (team.ownerId !== userId) {
+        return res.status(403).json({ message: "Only team captain can distribute payouts" });
+      }
+
+      // Check team has sufficient credits
+      if (team.credits < amount) {
+        return res.status(400).json({ message: "Insufficient team credits" });
+      }
+
+      // Use the provided recipientId, or default to self
+      const targetUserId = recipientId || userId;
+      
+      // Verify recipient is a team member
+      const isMember = await storage.isTeamMember(teamId, targetUserId);
+      if (!isMember) {
+        return res.status(400).json({ message: "Recipient is not a team member" });
+      }
+
+      // Deduct from team and add to user's withdrawable credits
+      await storage.updateTeamCredits(teamId, -amount);
+      await storage.updateUserWithdrawableCredits(targetUserId, amount);
+
+      const recipient = await storage.getUser(targetUserId);
+      await storage.createTransaction({
+        userId: targetUserId,
+        teamId,
+        type: "team_payout",
+        credits: amount,
+        creditsAfter: recipient!.withdrawableCredits,
+        description: `Payout from team ${team.name}`,
+      });
+
+      res.json({ message: "Payout successful", amount });
+    } catch (error) {
+      console.error("Error processing payout:", error);
+      res.status(500).json({ message: "Failed to process payout" });
+    }
+  });
+
+  // User requests withdrawal from their withdrawable credits
+  app.post("/api/withdrawal/request", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { credits, bankName, accountNumber, accountName } = req.body;
+
+      const WITHDRAWAL_FEE = 5;
+      const CREDITS_PER_2_USD = 100;
+
+      if (!credits || credits < CREDITS_PER_2_USD) {
+        return res.status(400).json({ message: `Minimum withdrawal is ${CREDITS_PER_2_USD} credits ($2)` });
+      }
+
+      if (!bankName || !accountNumber || !accountName) {
+        return res.status(400).json({ message: "Bank details are required" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const totalRequired = credits + WITHDRAWAL_FEE;
+      if (user.withdrawableCredits < totalRequired) {
+        return res.status(400).json({ 
+          message: `Insufficient withdrawable credits. You need ${totalRequired} credits (including ${WITHDRAWAL_FEE} fee).` 
+        });
+      }
+
+      // Calculate USD amount (100 credits = $2)
+      const usdAmount = (credits / CREDITS_PER_2_USD) * 2;
+
+      // Deduct credits including fee from withdrawable balance
+      await storage.updateUserWithdrawableCredits(userId, -totalRequired);
+
+      const withdrawal = await storage.createWithdrawalRequest({
+        userId,
+        credits,
+        fee: WITHDRAWAL_FEE,
+        usdAmount: usdAmount.toFixed(2),
+        bankName,
+        accountNumber,
+        accountName,
+      });
+
+      await storage.createTransaction({
+        userId,
+        type: "withdrawal_request",
+        credits: -totalRequired,
+        creditsAfter: user.withdrawableCredits - totalRequired,
+        description: `Withdrawal request: ${credits} credits ($${usdAmount.toFixed(2)}) + ${WITHDRAWAL_FEE} fee`,
+      });
+
+      res.status(201).json(withdrawal);
+    } catch (error) {
+      console.error("Error creating withdrawal request:", error);
+      res.status(500).json({ message: "Failed to create withdrawal request" });
+    }
+  });
+
+  // Get user's withdrawal requests
+  app.get("/api/withdrawal/requests", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const requests = await storage.getWithdrawalRequests(userId);
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching withdrawal requests:", error);
+      res.status(500).json({ message: "Failed to fetch withdrawal requests" });
+    }
+  });
+
+  // Admin: Get all withdrawal requests
+  app.get("/api/admin/withdrawals", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const requests = await storage.getAllWithdrawalRequests();
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching withdrawal requests:", error);
+      res.status(500).json({ message: "Failed to fetch withdrawal requests" });
+    }
+  });
+
+  // Admin: Approve withdrawal
+  app.post("/api/admin/withdrawals/:id/approve", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { adminNotes } = req.body;
+      const withdrawal = await storage.updateWithdrawalStatus(
+        req.params.id, 
+        "approved", 
+        userId, 
+        adminNotes
+      );
+
+      res.json(withdrawal);
+    } catch (error) {
+      console.error("Error approving withdrawal:", error);
+      res.status(500).json({ message: "Failed to approve withdrawal" });
+    }
+  });
+
+  // Admin: Reject withdrawal (refund credits)
+  app.post("/api/admin/withdrawals/:id/reject", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { adminNotes } = req.body;
+      
+      // Get the withdrawal request to refund credits
+      const requests = await storage.getAllWithdrawalRequests();
+      const request = requests.find(r => r.id === req.params.id);
+      
+      if (!request) {
+        return res.status(404).json({ message: "Withdrawal request not found" });
+      }
+
+      if (request.status !== "pending") {
+        return res.status(400).json({ message: "Can only reject pending requests" });
+      }
+
+      // Refund credits (including fee) to user's withdrawable balance
+      const refundAmount = request.credits + request.fee;
+      await storage.updateUserWithdrawableCredits(request.userId, refundAmount);
+
+      const withdrawal = await storage.updateWithdrawalStatus(
+        req.params.id, 
+        "rejected", 
+        userId, 
+        adminNotes
+      );
+
+      await storage.createTransaction({
+        userId: request.userId,
+        type: "withdrawal_refund",
+        credits: refundAmount,
+        description: `Withdrawal request rejected - credits refunded`,
+      });
+
+      res.json(withdrawal);
+    } catch (error) {
+      console.error("Error rejecting withdrawal:", error);
+      res.status(500).json({ message: "Failed to reject withdrawal" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

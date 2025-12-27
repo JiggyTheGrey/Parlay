@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -14,12 +16,16 @@ import {
   ArrowUpRight, 
   TrendingUp,
   Loader2,
-  CheckCircle,
   Sparkles,
   CreditCard,
-  Star
+  Star,
+  Wallet,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle
 } from "lucide-react";
-import type { Transaction } from "@shared/schema";
+import type { Transaction, WithdrawalRequest } from "@shared/schema";
 
 interface CreditPackage {
   id: string;
@@ -35,6 +41,10 @@ export default function WalletPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
+  const [withdrawCredits, setWithdrawCredits] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
 
   const { data: packages, isLoading: packagesLoading } = useQuery<CreditPackage[]>({
     queryKey: ["/api/credit-packages"],
@@ -42,6 +52,29 @@ export default function WalletPage() {
 
   const { data: transactions, isLoading: transactionsLoading } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
+  });
+
+  const { data: withdrawalRequests, isLoading: withdrawalsLoading } = useQuery<WithdrawalRequest[]>({
+    queryKey: ["/api/withdrawal/requests"],
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: async (data: { credits: number; bankName: string; accountNumber: string; accountName: string }) => {
+      return await apiRequest("POST", "/api/withdrawal/request", data);
+    },
+    onSuccess: () => {
+      toast({ title: "Withdrawal requested", description: "Your withdrawal is pending admin approval." });
+      setWithdrawCredits("");
+      setBankName("");
+      setAccountNumber("");
+      setAccountName("");
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/withdrawal/requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Withdrawal failed", description: error.message, variant: "destructive" });
+    },
   });
 
   const purchaseMutation = useMutation({
@@ -122,6 +155,39 @@ export default function WalletPage() {
   };
 
   const credits = user?.credits || 0;
+  const withdrawableCredits = user?.withdrawableCredits || 0;
+  const WITHDRAWAL_FEE = 5;
+  const MIN_WITHDRAWAL = 100;
+
+  const handleWithdraw = () => {
+    const creditsNum = parseInt(withdrawCredits);
+    if (!creditsNum || creditsNum < MIN_WITHDRAWAL) {
+      toast({ title: "Invalid amount", description: `Minimum withdrawal is ${MIN_WITHDRAWAL} credits ($2)`, variant: "destructive" });
+      return;
+    }
+    if (!bankName || !accountNumber || !accountName) {
+      toast({ title: "Missing information", description: "Please fill in all bank details", variant: "destructive" });
+      return;
+    }
+    withdrawMutation.mutate({ credits: creditsNum, bankName, accountNumber, accountName });
+  };
+
+  const getWithdrawalStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending":
+        return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pending</Badge>;
+      case "approved":
+        return <Badge className="bg-green-500"><CheckCircle2 className="mr-1 h-3 w-3" />Approved</Badge>;
+      case "rejected":
+        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Rejected</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const calculateUsdAmount = (creditAmount: number) => {
+    return ((creditAmount / 100) * 2).toFixed(2);
+  };
 
   return (
     <div className="space-y-6">
@@ -152,7 +218,26 @@ export default function WalletPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-green-500" />
+              Withdrawable
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center">
+              <p className="font-mono text-4xl font-bold text-green-500" data-testid="text-withdrawable-balance">
+                {formatCredits(withdrawableCredits)}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                ~${calculateUsdAmount(withdrawableCredits)} USD
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
@@ -160,11 +245,7 @@ export default function WalletPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-2xl font-bold">{user?.credits || 0}</p>
-                <p className="text-sm text-muted-foreground">Available</p>
-              </div>
+            <div className="grid grid-cols-2 gap-4 text-center">
               <div>
                 <p className="text-2xl font-bold">
                   {transactions?.filter(t => t.type === "credit_purchase").length || 0}
@@ -181,6 +262,128 @@ export default function WalletPage() {
           </CardContent>
         </Card>
       </div>
+
+      {withdrawableCredits >= MIN_WITHDRAWAL && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5" />
+              Request Withdrawal
+            </CardTitle>
+            <CardDescription>
+              Withdraw your winnings to your bank account. 100 credits = $2 USD. {WITHDRAWAL_FEE} credits fee per withdrawal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="withdraw-credits">Credits to Withdraw</Label>
+                  <Input
+                    id="withdraw-credits"
+                    type="number"
+                    min={MIN_WITHDRAWAL}
+                    max={withdrawableCredits - WITHDRAWAL_FEE}
+                    placeholder={`Min ${MIN_WITHDRAWAL} credits`}
+                    value={withdrawCredits}
+                    onChange={(e) => setWithdrawCredits(e.target.value)}
+                    data-testid="input-withdraw-credits"
+                  />
+                  {withdrawCredits && parseInt(withdrawCredits) >= MIN_WITHDRAWAL && (
+                    <p className="text-sm text-muted-foreground">
+                      You will receive: ${calculateUsdAmount(parseInt(withdrawCredits))} USD
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bank-name">Bank Name</Label>
+                  <Input
+                    id="bank-name"
+                    placeholder="e.g., First Bank, GTBank"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    data-testid="input-bank-name"
+                  />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="account-number">Account Number</Label>
+                  <Input
+                    id="account-number"
+                    placeholder="Your bank account number"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    data-testid="input-account-number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account-name">Account Name</Label>
+                  <Input
+                    id="account-name"
+                    placeholder="Name on your bank account"
+                    value={accountName}
+                    onChange={(e) => setAccountName(e.target.value)}
+                    data-testid="input-account-name"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-4">
+              <p className="text-sm text-muted-foreground">
+                <AlertCircle className="inline h-4 w-4 mr-1" />
+                Withdrawal fee: {WITHDRAWAL_FEE} credits. Admin approval required.
+              </p>
+              <Button 
+                onClick={handleWithdraw}
+                disabled={withdrawMutation.isPending}
+                data-testid="button-withdraw"
+              >
+                {withdrawMutation.isPending ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+                ) : (
+                  "Request Withdrawal"
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {withdrawalRequests && withdrawalRequests.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Withdrawal History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {withdrawalRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className="flex items-center justify-between rounded-md p-4 border"
+                  data-testid={`withdrawal-row-${req.id}`}
+                >
+                  <div>
+                    <p className="font-medium">{formatCredits(req.credits)} credits (${req.usdAmount})</p>
+                    <p className="text-sm text-muted-foreground">
+                      {req.bankName} - {req.accountNumber}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {getWithdrawalStatusBadge(req.status)}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : ""}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
