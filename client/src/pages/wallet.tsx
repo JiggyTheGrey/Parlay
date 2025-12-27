@@ -360,26 +360,29 @@ export default function WalletPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {withdrawalRequests.map((req) => (
-                <div
-                  key={req.id}
-                  className="flex items-center justify-between rounded-md p-4 border"
-                  data-testid={`withdrawal-row-${req.id}`}
-                >
-                  <div>
-                    <p className="font-medium">{formatCredits(req.credits)} credits (${req.usdAmount})</p>
-                    <p className="text-sm text-muted-foreground">
-                      {req.bankName} - {req.accountNumber}
-                    </p>
+              {withdrawalRequests.map((req) => {
+                const bankInfo = req.bankDetails ? JSON.parse(req.bankDetails) : {};
+                return (
+                  <div
+                    key={req.id}
+                    className="flex items-center justify-between rounded-md p-4 border"
+                    data-testid={`withdrawal-row-${req.id}`}
+                  >
+                    <div>
+                      <p className="font-medium">{formatCredits(req.creditsRequested)} credits (${(req.amountUsdCents / 100).toFixed(2)})</p>
+                      <p className="text-sm text-muted-foreground">
+                        {bankInfo.bankName || "N/A"} - {bankInfo.accountNumber || "N/A"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {getWithdrawalStatusBadge(req.status)}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : ""}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    {getWithdrawalStatusBadge(req.status)}
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : ""}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>

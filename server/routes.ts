@@ -1150,20 +1150,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Calculate USD amount (100 credits = $2)
-      const usdAmount = (credits / CREDITS_PER_2_USD) * 2;
+      // Calculate USD amount in cents (100 credits = $2 = 200 cents)
+      const usdCents = Math.floor((credits / CREDITS_PER_2_USD) * 200);
+      const netCredits = credits;
 
       // Deduct credits including fee from withdrawable balance
       await storage.updateUserWithdrawableCredits(userId, -totalRequired);
 
+      // Store bank details as JSON string
+      const bankDetails = JSON.stringify({ bankName, accountNumber, accountName });
+
       const withdrawal = await storage.createWithdrawalRequest({
         userId,
-        credits,
-        fee: WITHDRAWAL_FEE,
-        usdAmount: usdAmount.toFixed(2),
-        bankName,
-        accountNumber,
-        accountName,
+        creditsRequested: credits,
+        feeCredits: WITHDRAWAL_FEE,
+        netCredits,
+        amountUsdCents: usdCents,
+        bankDetails,
       });
 
       await storage.createTransaction({
@@ -1171,7 +1174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: "withdrawal_request",
         credits: -totalRequired,
         creditsAfter: user.withdrawableCredits - totalRequired,
-        description: `Withdrawal request: ${credits} credits ($${usdAmount.toFixed(2)}) + ${WITHDRAWAL_FEE} fee`,
+        description: `Withdrawal request: ${credits} credits ($${(usdCents / 100).toFixed(2)}) + ${WITHDRAWAL_FEE} fee`,
       });
 
       res.status(201).json(withdrawal);
@@ -1258,7 +1261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Refund credits (including fee) to user's withdrawable balance
-      const refundAmount = request.credits + request.fee;
+      const refundAmount = request.creditsRequested + request.feeCredits;
       await storage.updateUserWithdrawableCredits(request.userId, refundAmount);
 
       const withdrawal = await storage.updateWithdrawalStatus(

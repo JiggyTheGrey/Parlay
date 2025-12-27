@@ -38,11 +38,15 @@ import {
   Megaphone,
   Plus,
   Calendar,
-  Coins
+  Coins,
+  Wallet,
+  CheckCircle2,
+  XCircle,
+  Clock
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
-import type { MatchWithTeams, Team, User, Campaign } from "@shared/schema";
+import type { MatchWithTeams, Team, User, Campaign, WithdrawalRequestWithUser } from "@shared/schema";
 
 export default function Admin() {
   const { user } = useAuth();
@@ -63,6 +67,10 @@ export default function Admin() {
 
   const { data: allCampaigns, isLoading: campaignsLoading } = useQuery<Campaign[]>({
     queryKey: ["/api/campaigns"],
+  });
+
+  const { data: withdrawalRequests, isLoading: withdrawalsLoading } = useQuery<WithdrawalRequestWithUser[]>({
+    queryKey: ["/api/admin/withdrawals"],
   });
 
   const [resolvingMatch, setResolvingMatch] = useState<string | null>(null);
@@ -124,6 +132,32 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
       toast({ title: "Campaign ended", description: "The campaign has been completed." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const approveWithdrawalMutation = useMutation({
+    mutationFn: async (withdrawalId: string) => {
+      return await apiRequest("POST", `/api/admin/withdrawals/${withdrawalId}/approve`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/withdrawals"] });
+      toast({ title: "Withdrawal approved", description: "The withdrawal has been approved." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const rejectWithdrawalMutation = useMutation({
+    mutationFn: async (withdrawalId: string) => {
+      return await apiRequest("POST", `/api/admin/withdrawals/${withdrawalId}/reject`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/withdrawals"] });
+      toast({ title: "Withdrawal rejected", description: "The withdrawal has been rejected and credits refunded." });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -226,6 +260,15 @@ export default function Admin() {
           <TabsTrigger value="disputes" data-testid="tab-disputes">
             <AlertCircle className="mr-2 h-4 w-4" />
             Disputes
+          </TabsTrigger>
+          <TabsTrigger value="withdrawals" data-testid="tab-withdrawals">
+            <Wallet className="mr-2 h-4 w-4" />
+            Withdrawals
+            {withdrawalRequests?.filter(w => w.status === "pending").length ? (
+              <Badge variant="destructive" className="ml-2">
+                {withdrawalRequests.filter(w => w.status === "pending").length}
+              </Badge>
+            ) : null}
           </TabsTrigger>
           <TabsTrigger value="campaigns" data-testid="tab-campaigns">
             <Megaphone className="mr-2 h-4 w-4" />
@@ -338,6 +381,113 @@ export default function Admin() {
                   <AlertCircle className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
                   <p className="font-medium">No disputed matches</p>
                   <p className="text-sm text-muted-foreground">All matches are resolved</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="withdrawals" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Withdrawal Requests</CardTitle>
+              <CardDescription>
+                Review and approve user withdrawal requests
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {withdrawalsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
+                </div>
+              ) : withdrawalRequests && withdrawalRequests.length > 0 ? (
+                <div className="space-y-4">
+                  {withdrawalRequests.map((request) => {
+                    const bankInfo = request.bankDetails ? JSON.parse(request.bankDetails) : {};
+                    const isPending = request.status === "pending";
+                    return (
+                      <div key={request.id} className="rounded-md border p-4">
+                        <div className="flex items-center justify-between gap-4 mb-4">
+                          <div>
+                            <h3 className="font-semibold">
+                              {request.user?.firstName || "Unknown"} {request.user?.lastName || "User"}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {request.user?.email}
+                            </p>
+                          </div>
+                          {request.status === "pending" ? (
+                            <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pending</Badge>
+                          ) : request.status === "approved" ? (
+                            <Badge className="bg-green-500"><CheckCircle2 className="mr-1 h-3 w-3" />Approved</Badge>
+                          ) : (
+                            <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Rejected</Badge>
+                          )}
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2 mb-4">
+                          <div className="rounded-md bg-muted p-3">
+                            <p className="text-sm font-medium mb-1">Amount</p>
+                            <p className="text-lg font-bold">{request.creditsRequested.toLocaleString()} credits</p>
+                            <p className="text-sm text-muted-foreground">
+                              ${(request.amountUsdCents / 100).toFixed(2)} USD (Fee: {request.feeCredits} credits)
+                            </p>
+                          </div>
+                          <div className="rounded-md bg-muted p-3">
+                            <p className="text-sm font-medium mb-1">Bank Details</p>
+                            <p className="font-medium">{bankInfo.bankName || "N/A"}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {bankInfo.accountNumber} - {bankInfo.accountName}
+                            </p>
+                          </div>
+                        </div>
+
+                        {isPending && (
+                          <div className="flex gap-2">
+                            <Button
+                              className="flex-1"
+                              onClick={() => approveWithdrawalMutation.mutate(request.id)}
+                              disabled={approveWithdrawalMutation.isPending || rejectWithdrawalMutation.isPending}
+                              data-testid={`button-approve-${request.id}`}
+                            >
+                              {approveWithdrawalMutation.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                              )}
+                              Approve
+                            </Button>
+                            <Button
+                              className="flex-1"
+                              variant="destructive"
+                              onClick={() => rejectWithdrawalMutation.mutate(request.id)}
+                              disabled={approveWithdrawalMutation.isPending || rejectWithdrawalMutation.isPending}
+                              data-testid={`button-reject-${request.id}`}
+                            >
+                              {rejectWithdrawalMutation.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <XCircle className="mr-2 h-4 w-4" />
+                              )}
+                              Reject
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {request.processedAt && (
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Processed: {new Date(request.processedAt).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <Wallet className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+                  <p className="font-medium">No withdrawal requests</p>
+                  <p className="text-sm text-muted-foreground">All requests have been processed</p>
                 </div>
               )}
             </CardContent>
